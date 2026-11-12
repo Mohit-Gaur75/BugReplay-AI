@@ -1,0 +1,17 @@
+{
+  "name": "bugreplay",
+  "version": "1.0.0",
+  "description": "BugReplay AI local CLI companion to replicate production crashes in 5 seconds",
+  "type": "module",
+  "bin": {
+    "bugreplay": "./bin/bugreplay.js"
+  },
+  "keywords": [
+    "playwright",
+    "bug-replay",
+    "testing",
+    "e2e"
+  ],
+  "author": "BugReplay AI Team",
+  "license": "MIT"
+}
