@@ -52,6 +52,15 @@ app.get(['/health', '/api/v1/health'], (req, res) => {
   });
 });
 
+// Mock endpoint for Sandbox Demo payment failure testing
+app.post('/api/v1/mock/payment-timeout', (req, res) => {
+  res.status(500).json({
+    error: 'PaymentGatewayTimeout',
+    code: 'GATEWAY_TIMEOUT_504',
+    message: 'Downstream payment processor failed to respond within 3000ms'
+  });
+});
+
 // Mount API routes
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/projects', projectsRoutes);
