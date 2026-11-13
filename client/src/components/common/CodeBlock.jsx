@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Copy, Check, Download, Terminal, Layers } from 'lucide-react';
-import { convertToCypress, convertToPuppeteer } from '../../utils/frameworkConverter.js';
+import { convertToCypress, convertToPuppeteer, convertToRTL } from '../../utils/frameworkConverter.js';
 
 export default function CodeBlock({ code, filename = 'bug-replay.spec.js', incidentId = null, incident = null }) {
   const [activeFramework, setActiveFramework] = useState('playwright');
@@ -17,6 +17,9 @@ export default function CodeBlock({ code, filename = 'bug-replay.spec.js', incid
   } else if (activeFramework === 'puppeteer') {
     currentCode = convertToPuppeteer(code, incident);
     currentFilename = filename.replace(/\.spec\.js$/, '.puppeteer.js');
+  } else if (activeFramework === 'rtl') {
+    currentCode = convertToRTL(code, incident);
+    currentFilename = filename.replace(/\.spec\.js$/, '.test.jsx');
   }
 
   const handleCopy = () => {
@@ -87,6 +90,16 @@ export default function CodeBlock({ code, filename = 'bug-replay.spec.js', incid
               }`}
             >
               Puppeteer
+            </button>
+            <button
+              onClick={() => setActiveFramework('rtl')}
+              className={`px-2.5 py-1 text-[11px] font-semibold rounded-md transition-all ${
+                activeFramework === 'rtl'
+                  ? 'bg-purple-600 text-white shadow-sm'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              React Testing Library
             </button>
           </div>
 

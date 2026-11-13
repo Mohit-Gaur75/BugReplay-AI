@@ -6,7 +6,7 @@ import { initDb, closeDb } from '../src/db/db.js';
 import { runMigrations } from '../src/db/migrations.js';
 import { Synthesizer } from '../src/modules/ai/synthesizer.js';
 import { processJobsOnce } from '../src/jobs/worker.js';
-import { convertToCypress, convertToPuppeteer } from '../../client/src/utils/frameworkConverter.js';
+import { convertToCypress, convertToPuppeteer, convertToRTL, generateGitPatch } from '../../client/src/utils/frameworkConverter.js';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -185,5 +185,17 @@ test('reproduce production failure', async ({ page }) => {
     assert.ok(puppeteerCode.includes("import puppeteer from 'puppeteer'"));
     assert.ok(puppeteerCode.includes("await page.goto('http://localhost:5173/checkout'"));
     assert.ok(puppeteerCode.includes("await page.click('button#checkout-btn');"));
+
+    const rtlCode = convertToRTL(playwrightCode, mockIncident);
+    assert.ok(rtlCode.includes("from '@testing-library/react'"));
+    assert.ok(rtlCode.includes("from 'vitest'"));
+    assert.ok(rtlCode.includes("vi.stubGlobal('fetch'"));
+    assert.ok(rtlCode.includes("Component Crash Reproduction"));
+
+    const gitPatch = generateGitPatch(mockIncident);
+    assert.ok(gitPatch.includes("[PATCH] fix: resolve Error in #abc-1234"));
+    assert.ok(gitPatch.includes("--- a/src/pages/Checkout.jsx"));
+    assert.ok(gitPatch.includes("+++ b/src/pages/Checkout.jsx"));
+    assert.ok(gitPatch.includes("if (!response.ok)"));
   });
 });

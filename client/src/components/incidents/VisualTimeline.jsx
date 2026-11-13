@@ -1,7 +1,25 @@
-import React from 'react';
-import { MousePointer, Globe, AlertTriangle, Bug, ArrowRight, Clock } from 'lucide-react';
+import React, { useState } from 'react';
+import { MousePointer, Globe, AlertTriangle, Bug, ArrowRight, Clock, Terminal, Copy, Check } from 'lucide-react';
 
 export default function VisualTimeline({ telemetry = [], errorDetails = null }) {
+  const [copiedCurlIndex, setCopiedCurlIndex] = useState(null);
+
+  const generateCurl = (item) => {
+    const method = item.method || 'GET';
+    const url = item.url;
+    let curl = `curl -X ${method} '${url}'`;
+    curl += ` \\\n  -H 'Content-Type: application/json'`;
+    curl += ` \\\n  -H 'User-Agent: BugReplay-Debug-Client/1.0'`;
+    return curl;
+  };
+
+  const handleCopyCurl = (item, idx) => {
+    const cmd = generateCurl(item);
+    navigator.clipboard.writeText(cmd);
+    setCopiedCurlIndex(idx);
+    setTimeout(() => setCopiedCurlIndex(null), 2000);
+  };
+
   if (!telemetry || telemetry.length === 0) {
     return (
       <div className="p-8 text-center text-zinc-500 text-xs border border-dashed border-border rounded-xl">
@@ -79,6 +97,24 @@ export default function VisualTimeline({ telemetry = [], errorDetails = null }) 
                       {item.status || 'TIMEOUT'}
                     </span>
                     {item.durationMs && <span className="text-[10px] text-zinc-500 font-mono">{item.durationMs}ms</span>}
+
+                    <button
+                      onClick={() => handleCopyCurl(item, index)}
+                      className="ml-auto flex items-center space-x-1 px-2 py-0.5 rounded bg-surface-elevated hover:bg-zinc-700 text-zinc-400 hover:text-white border border-border text-[10px] font-mono transition-colors"
+                      title="Copy reproduction cURL command"
+                    >
+                      {copiedCurlIndex === index ? (
+                        <>
+                          <Check className="w-2.5 h-2.5 text-emerald-400" />
+                          <span className="text-emerald-400">Copied!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Terminal className="w-2.5 h-2.5 text-blue-400" />
+                          <span>Copy cURL</span>
+                        </>
+                      )}
+                    </button>
                   </div>
                   {item.responseBody && (
                     <pre className="mt-2 text-[11px] font-mono bg-background p-2 rounded border border-border text-red-300 overflow-x-auto">

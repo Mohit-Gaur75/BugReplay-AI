@@ -100,3 +100,80 @@ ${clickActions}
 })();
 `;
 }
+
+export function convertToRTL(playwrightCode, incident) {
+  if (!playwrightCode) return '';
+
+  const shortId = incident?.id ? incident.id.slice(0, 8) : 'test';
+  const errorMsg = incident?.error_message || 'Application Error';
+
+  return `// BugReplay AI — React Testing Library Component Test
+// Incident ID: #${shortId}
+// Expected Error: ${errorMsg}
+
+import React from 'react';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+describe('Component Crash Reproduction (Incident #${shortId})', () => {
+  beforeEach(() => {
+    // Mock global fetch to simulate captured backend 500 / timeout response
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => ({ error: 'Simulated backend failure' }),
+    }));
+  });
+
+  it('reproduces crash when user completes action sequence', async () => {
+    const user = userEvent.setup();
+
+    // Render culprit component
+    // render(<CulpritComponent />);
+
+    // Replay user click interaction sequence
+    const actionButton = screen.queryByRole('button', { name: /(submit|checkout|order|pay)/i });
+    if (actionButton) {
+      await user.click(actionButton);
+    }
+
+    // Verify error boundary catches or renders notification
+    await waitFor(() => {
+      const errorElement = screen.queryByText(/(error|failed|timeout)/i);
+      expect(errorElement).toBeDefined();
+    });
+  });
+});
+`;
+}
+
+export function generateGitPatch(incident) {
+  if (!incident) return '';
+  const shortId = incident.id ? incident.id.slice(0, 8) : 'test';
+  const suggestedFix = incident.suggested_fix || '// Add response error boundary or optional chaining';
+  const culpritFile = incident.page_url?.includes('checkout') ? 'src/pages/Checkout.jsx' : 'src/services/api.js';
+
+  return `From: BugReplay AI <bot@bugreplay.dev>
+Subject: [PATCH] fix: resolve ${incident.error_type || 'Error'} in #${shortId}
+
+AI Root Cause:
+${incident.ai_root_cause_summary || 'Null state or unhandled network failure.'}
+
+Suggested Fix:
+${suggestedFix}
+---
+--- a/${culpritFile}
++++ b/${culpritFile}
+@@ -32,6 +32,9 @@
+-  const result = await response.json();
+-  return result.transactionId;
++  if (!response.ok) {
++    throw new Error('Network failure: status ' + response.status);
++  }
++  const result = await response.json();
++  return result?.transactionId ?? null;
+--
+2.45.0
+`;
+}

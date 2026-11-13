@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../services/api.js';
 import CodeBlock from '../components/common/CodeBlock.jsx';
 import VisualTimeline from '../components/incidents/VisualTimeline.jsx';
+import { generateGitPatch } from '../utils/frameworkConverter.js';
 import { 
   ArrowLeft, 
   Bug, 
@@ -19,7 +20,9 @@ import {
   ExternalLink,
   Copy,
   Check,
-  X
+  X,
+  GitBranch,
+  Download
 } from 'lucide-react';
 
 export default function IncidentDetails({ incidentId, onBack }) {
@@ -32,6 +35,10 @@ export default function IncidentDetails({ incidentId, onBack }) {
   // GitHub Issue Modal State
   const [showGithubModal, setShowGithubModal] = useState(false);
   const [copiedIssue, setCopiedIssue] = useState(false);
+
+  // Git Patch Modal State
+  const [showPatchModal, setShowPatchModal] = useState(false);
+  const [copiedPatch, setCopiedPatch] = useState(false);
 
   const fetchIncident = async () => {
     try {
@@ -227,14 +234,24 @@ export default function IncidentDetails({ incidentId, onBack }) {
               </div>
 
               {incident.suggested_fix && (
-                <div className="p-3 bg-background/80 border border-border rounded-lg">
-                  <span className="text-emerald-400 font-semibold block mb-1 flex items-center space-x-1.5">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>Recommended Code Fix:</span>
-                  </span>
-                  <p className="text-zinc-300 font-mono text-[11px] leading-relaxed">
-                    {incident.suggested_fix}
-                  </p>
+                <div className="p-3 bg-background/80 border border-border rounded-lg space-y-2">
+                  <div>
+                    <span className="text-emerald-400 font-semibold block mb-1 flex items-center space-x-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>Recommended Code Fix:</span>
+                    </span>
+                    <p className="text-zinc-300 font-mono text-[11px] leading-relaxed">
+                      {incident.suggested_fix}
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => setShowPatchModal(true)}
+                    className="flex items-center space-x-1.5 text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 px-2.5 py-1 rounded bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 transition-colors"
+                  >
+                    <GitBranch className="w-3.5 h-3.5" />
+                    <span>View Unified Git Patch (.patch)</span>
+                  </button>
                 </div>
               )}
             </div>
@@ -381,6 +398,81 @@ npx bugreplay run ${incident.id} --headed
                   <ExternalLink className="w-3 h-3" />
                 </a>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: View Unified Git Patch */}
+      {showPatchModal && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-surface border border-border rounded-xl p-6 max-w-2xl w-full shadow-2xl flex flex-col max-h-[90vh]">
+            <div className="flex items-center justify-between pb-3 border-b border-border">
+              <div className="flex items-center space-x-2">
+                <div className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                  <GitBranch className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Automated Git Patch (Unified Diff)</h3>
+                  <p className="text-[11px] text-zinc-400">Apply this patch to your repository using git apply</p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setShowPatchModal(false)}
+                className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="my-4 flex-1 overflow-y-auto">
+              <div className="mb-2 p-2 bg-background border border-border rounded flex items-center justify-between text-xs font-mono text-zinc-400">
+                <span className="flex items-center space-x-1.5">
+                  <Terminal className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Terminal command:</span>
+                  <span className="text-zinc-200 select-all">git apply fix.patch</span>
+                </span>
+              </div>
+
+              <pre className="p-3 bg-background border border-border rounded-lg font-mono text-[11px] text-emerald-300 leading-relaxed overflow-x-auto select-all m-0 max-h-80">
+                {generateGitPatch(incident)}
+              </pre>
+            </div>
+
+            <div className="flex items-center justify-end space-x-2 pt-3 border-t border-border">
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(generateGitPatch(incident));
+                  setCopiedPatch(true);
+                  setTimeout(() => setCopiedPatch(false), 2000);
+                }}
+                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold border border-zinc-700 transition-colors"
+              >
+                {copiedPatch ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copiedPatch ? 'Copied Patch!' : 'Copy Patch'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const patchContent = generateGitPatch(incident);
+                  const blob = new Blob([patchContent], { type: 'text/plain;charset=utf-8' });
+                  const url = URL.createObjectURL(blob);
+                  const link = document.createElement('a');
+                  link.href = url;
+                  link.download = `bugreplay-fix-${incident.id.slice(0, 8)}.patch`;
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                  URL.revokeObjectURL(url);
+                }}
+                className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-sm transition-colors"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Download .patch</span>
+              </button>
             </div>
           </div>
         </div>
