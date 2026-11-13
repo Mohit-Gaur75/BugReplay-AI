@@ -1,0 +1,104 @@
+import { test, describe } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const sdkPath = path.resolve(__dirname, '../src/bugreplay.js');
+
+// Load SDK into Node sandbox for unit testing
+const sdkCode = fs.readFileSync(sdkPath, 'utf8');
+
+// Mock browser globals
+const mockWindow = {};
+const mockDocument = {
+  currentScript: null,
+  addEventListener: () => {},
+  querySelector: () => null,
+};
+
+const mockModule = { exports: {} };
+
+const evaluateSdk = new Function('window', 'document', 'module', sdkCode);
+evaluateSdk(mockWindow, mockDocument, mockModule);
+
+const { RingBuffer, scrubText, scrubUrl, isSensitiveElement } = mockModule.exports;
+
+describe('Phase 3: Client Capture SDK Subsystems', () => {
+  describe('Rolling Ring Buffer', () => {
+    test('maintains correct chronological items when under capacity', () => {
+      const buffer = new RingBuffer(15);
+      buffer.push({ type: 'click', id: 'btn-1' });
+      buffer.push({ type: 'click', id: 'btn-2' });
+
+      const items = buffer.getItems();
+      assert.equal(items.length, 2);
+      assert.equal(items[0].id, 'btn-1');
+      assert.equal(items[1].id, 'btn-2');
+    });
+
+    test('strictly bounds capacity to 15 items and drops oldest', () => {
+      const buffer = new RingBuffer(15);
+      for (let i = 1; i <= 25; i++) {
+        buffer.push({ type: 'click', id: `btn-${i}` });
+      }
+
+      const items = buffer.getItems();
+      assert.equal(items.length, 15, 'Capacity must never exceed 15 items');
+      assert.equal(items[0].id, 'btn-11', 'Oldest preserved item must be #11');
+      assert.equal(items[14].id, 'btn-25', 'Newest item must be #25');
+    });
+
+    test('clear() resets buffer state cleanly', () => {
+      const buffer = new RingBuffer(15);
+      buffer.push({ type: 'click', id: '1' });
+      buffer.clear();
+      assert.equal(buffer.getItems().length, 0);
+    });
+  });
+
+  describe('PII Masking & Data Redaction', () => {
+    test('scrubText masks 16-digit credit card sequences', () => {
+      const raw = 'Payment with card 4111 2222 3333 4444 approved';
+      const clean = scrubText(raw);
+      assert.equal(clean, 'Payment with card ••••-••••-••••-•••• approved');
+      assert.ok(!clean.includes('4111'));
+    });
+
+    test('scrubUrl masks sensitive query parameters', () => {
+      const rawUrl = 'https://api.example.com/checkout?token=secret123&user=john&password=mypassword';
+      const cleanUrl = scrubUrl(rawUrl);
+      assert.ok(!cleanUrl.includes('secret123'));
+      assert.ok(!cleanUrl.includes('mypassword'));
+      assert.ok(cleanUrl.includes('user=john'));
+    });
+
+    test('isSensitiveElement identifies password, cvv and data-private inputs', () => {
+      const mockPasswordInput = {
+        getAttribute: (attr) => (attr === 'type' ? 'password' : null),
+        hasAttribute: () => false,
+      };
+      assert.equal(isSensitiveElement(mockPasswordInput), true);
+
+      const mockCvvInput = {
+        getAttribute: (attr) => (attr === 'name' ? 'cvvCode' : null),
+        hasAttribute: () => false,
+      };
+      assert.equal(isSensitiveElement(mockCvvInput), true);
+
+      const mockPrivateDiv = {
+        getAttribute: () => null,
+        hasAttribute: (attr) => attr === 'data-private',
+      };
+      assert.equal(isSensitiveElement(mockPrivateDiv), true);
+
+      const mockStandardBtn = {
+        getAttribute: (attr) => (attr === 'type' ? 'submit' : null),
+        hasAttribute: () => false,
+      };
+      assert.equal(isSensitiveElement(mockStandardBtn), false);
+    });
+  });
+});
