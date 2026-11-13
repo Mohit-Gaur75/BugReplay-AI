@@ -1,0 +1,19 @@
+{
+  "name": "@bugreplay/sdk",
+  "version": "1.0.0",
+  "description": "BugReplay AI - Lightweight zero-dependency in-browser capture SDK",
+  "type": "module",
+  "main": "src/bugreplay.js",
+  "scripts": {
+    "build": "node scripts/build.js",
+    "test": "node --test tests/**/*.test.js"
+  },
+  "keywords": [
+    "bugreplay",
+    "sdk",
+    "telemetry",
+    "playwright"
+  ],
+  "author": "BugReplay AI Team",
+  "license": "MIT"
+}

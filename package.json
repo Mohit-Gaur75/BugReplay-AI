@@ -1,0 +1,35 @@
+{
+  "name": "bugreplay-ai",
+  "version": "1.0.0",
+  "private": true,
+  "description": "BugReplay AI — Turn production bugs into reproducible Playwright tests automatically",
+  "type": "module",
+  "workspaces": [
+    "server",
+    "client",
+    "sdk",
+    "cli"
+  ],
+  "scripts": {
+    "dev": "npm run dev:server",
+    "dev:all": "node scripts/dev.js",
+    "dev:server": "npm run dev --workspace=server",
+    "dev:client": "npm run dev --workspace=client",
+    "build": "npm run build --workspace=sdk && npm run build --workspace=client",
+    "test": "npm run test --workspace=server",
+    "test:server": "npm run test --workspace=server",
+    "test:sdk": "npm run test --workspace=sdk",
+    "test:cli": "npm run test --workspace=cli",
+    "seed": "node scripts/seed.js"
+  },
+  "keywords": [
+    "playwright",
+    "debugging",
+    "testing",
+    "e2e",
+    "error-tracking",
+    "ai"
+  ],
+  "author": "BugReplay AI Team",
+  "license": "MIT"
+}

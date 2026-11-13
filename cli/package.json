@@ -1,0 +1,19 @@
+{
+  "name": "bugreplay",
+  "version": "1.0.0",
+  "description": "BugReplay AI CLI — Replay production bugs with local Playwright E2E execution",
+  "type": "module",
+  "bin": {
+    "bugreplay": "./src/index.js"
+  },
+  "scripts": {
+    "test": "node --test tests/**/*.test.js"
+  },
+  "keywords": [
+    "bugreplay",
+    "cli",
+    "playwright"
+  ],
+  "author": "BugReplay AI Team",
+  "license": "MIT"
+}
