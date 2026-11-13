@@ -58,4 +58,13 @@ export class ProjectsController {
       next(err);
     }
   }
+
+  static async testWebhook(req, res, next) {
+    try {
+      const result = await ProjectsService.testWebhook(req.user.id, req.params.id);
+      return successResponse(res, result, 'Test webhook dispatched', 200);
+    } catch (err) {
+      next(err);
+    }
+  }
 }

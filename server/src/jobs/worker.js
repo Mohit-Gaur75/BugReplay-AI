@@ -1,5 +1,6 @@
 import { getDb } from '../db/db.js';
 import { Synthesizer } from '../modules/ai/synthesizer.js';
+import { WebhookNotifier } from '../services/webhookNotifier.js';
 
 let workerInterval = null;
 
@@ -58,6 +59,16 @@ export async function processSingleJob(job) {
     });
 
     completeTx();
+
+    // Trigger Webhook Notification if project has webhook_url configured
+    try {
+      const proj = db.prepare('SELECT name, webhook_url FROM projects WHERE id = ?').get(incident.project_id);
+      if (proj && proj.webhook_url) {
+        WebhookNotifier.sendIncidentAlert(proj.webhook_url, proj, incident, synthesis).catch(() => {});
+      }
+    } catch (e) {
+      // Non-blocking
+    }
   } catch (err) {
     console.error(`[JobWorker] Error processing job ${job.id}:`, err.message);
 

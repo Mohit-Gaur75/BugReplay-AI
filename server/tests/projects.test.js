@@ -1,6 +1,7 @@
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import request from 'supertest';
+process.env.NODE_ENV = 'test';
 import { createApp } from '../src/app.js';
 import { initDb, closeDb } from '../src/db/db.js';
 import { runMigrations } from '../src/db/migrations.js';
@@ -106,16 +107,55 @@ describe('Feature 2.2: Projects & Cryptographic API Key Management', () => {
     assert.equal(res.body.error.code, 'PROJECT_NOT_FOUND');
   });
 
-  test('PATCH /api/v1/projects/:id updates project details', async () => {
+  test('PATCH /api/v1/projects/:id updates project details including webhook_url', async () => {
     const res = await request(app)
       .patch(`/api/v1/projects/${aliceProjectId}`)
       .set('Authorization', `Bearer ${aliceToken}`)
-      .send({ name: 'Alice SaaS App (Renamed)', allowed_domains: '*' });
+      .send({ 
+        name: 'Alice SaaS App (Renamed)', 
+        allowed_domains: '*',
+        webhook_url: 'https://hooks.slack.com/services/T000/B000/XXXX'
+      });
 
     assert.equal(res.status, 200);
     assert.equal(res.body.success, true);
     assert.equal(res.body.data.project.name, 'Alice SaaS App (Renamed)');
     assert.equal(res.body.data.project.allowed_domains, '*');
+    assert.equal(res.body.data.project.webhook_url, 'https://hooks.slack.com/services/T000/B000/XXXX');
+  });
+
+  test('POST /api/v1/projects/:id/test-webhook validates permission and dispatches test alert', async () => {
+    // Bob should get 404 for Alice's project
+    const bobRes = await request(app)
+      .post(`/api/v1/projects/${aliceProjectId}/test-webhook`)
+      .set('Authorization', `Bearer ${bobToken}`);
+
+    assert.equal(bobRes.status, 404);
+    assert.equal(bobRes.body.error.code, 'PROJECT_NOT_FOUND');
+
+    // Alice testing with configured webhook (WebhookNotifier will attempt or mock gracefully)
+    const aliceRes = await request(app)
+      .post(`/api/v1/projects/${aliceProjectId}/test-webhook`)
+      .set('Authorization', `Bearer ${aliceToken}`);
+
+    assert.equal(aliceRes.status, 200);
+    assert.equal(aliceRes.body.success, true);
+    assert.ok(aliceRes.body.data.sent_at);
+  });
+
+  test('POST /api/v1/projects/:id/test-webhook fails if webhook_url is null', async () => {
+    // Temporarily clear webhook_url
+    await request(app)
+      .patch(`/api/v1/projects/${aliceProjectId}`)
+      .set('Authorization', `Bearer ${aliceToken}`)
+      .send({ webhook_url: '' });
+
+    const res = await request(app)
+      .post(`/api/v1/projects/${aliceProjectId}/test-webhook`)
+      .set('Authorization', `Bearer ${aliceToken}`);
+
+    assert.equal(res.status, 400);
+    assert.equal(res.body.error.code, 'WEBHOOK_NOT_CONFIGURED');
   });
 
   test('POST /api/v1/projects/:id/rotate-key generates new key and invalidates old hash', async () => {

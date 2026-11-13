@@ -12,6 +12,7 @@ router.get('/', ProjectsController.list);
 router.get('/:id', ProjectsController.getById);
 router.patch('/:id', ProjectsController.update);
 router.post('/:id/rotate-key', ProjectsController.rotateKey);
+router.post('/:id/test-webhook', ProjectsController.testWebhook);
 router.delete('/:id', ProjectsController.delete);
 
 export default router;

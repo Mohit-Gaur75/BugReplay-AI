@@ -117,6 +117,16 @@ const migrationsList = [
         CREATE INDEX IF NOT EXISTS idx_jobs_status_created ON jobs(status, created_at);
       `);
     }
+  },
+  {
+    name: '002_add_webhook_url_to_projects',
+    up: (db) => {
+      // Add webhook_url column to projects table if not exists
+      const columns = db.prepare("PRAGMA table_info('projects')").all().map((c) => c.name);
+      if (!columns.includes('webhook_url')) {
+        db.exec(`ALTER TABLE projects ADD COLUMN webhook_url TEXT DEFAULT NULL;`);
+      }
+    }
   }
 ];
 

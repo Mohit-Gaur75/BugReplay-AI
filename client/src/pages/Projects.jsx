@@ -11,7 +11,10 @@ import {
   Globe, 
   Code2, 
   AlertTriangle,
-  ExternalLink
+  ExternalLink,
+  Bell,
+  Send,
+  AlertCircle
 } from 'lucide-react';
 
 export default function Projects() {
@@ -23,7 +26,14 @@ export default function Projects() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [projectName, setProjectName] = useState('');
   const [allowedDomains, setAllowedDomains] = useState('*');
+  const [webhookUrl, setWebhookUrl] = useState('');
   const [creating, setCreating] = useState(false);
+
+  // Webhook action states
+  const [editingWebhookId, setEditingWebhookId] = useState(null);
+  const [tempWebhookUrl, setTempWebhookUrl] = useState('');
+  const [testingWebhook, setTestingWebhook] = useState({});
+  const [webhookFeedback, setWebhookFeedback] = useState({});
 
   // New Key Modal (shows raw key once)
   const [newKeyModal, setNewKeyModal] = useState(null); // { key, name }
@@ -53,12 +63,14 @@ export default function Projects() {
       const res = await api.post('/projects', {
         name: projectName,
         allowed_domains: allowedDomains,
+        webhook_url: webhookUrl.trim() || undefined,
       });
 
       const newProj = res.data?.project;
       setShowCreateModal(false);
       setProjectName('');
       setAllowedDomains('*');
+      setWebhookUrl('');
       fetchProjects();
 
       // Show raw API key once
@@ -70,6 +82,42 @@ export default function Projects() {
       alert(`Could not create project: ${err.message}`);
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleSaveWebhook = async (projectId) => {
+    try {
+      await api.patch(`/projects/${projectId}`, {
+        webhook_url: tempWebhookUrl.trim() || null
+      });
+      setEditingWebhookId(null);
+      fetchProjects();
+    } catch (err) {
+      alert(`Could not update webhook: ${err.message}`);
+    }
+  };
+
+  const handleTestWebhook = async (projectId) => {
+    setTestingWebhook(prev => ({ ...prev, [projectId]: true }));
+    try {
+      const res = await api.post(`/projects/${projectId}/test-webhook`);
+      setWebhookFeedback(prev => ({
+        ...prev,
+        [projectId]: { type: 'success', message: res.data?.message || 'Test alert dispatched successfully!' }
+      }));
+      setTimeout(() => {
+        setWebhookFeedback(prev => ({ ...prev, [projectId]: null }));
+      }, 4000);
+    } catch (err) {
+      setWebhookFeedback(prev => ({
+        ...prev,
+        [projectId]: { type: 'error', message: err.message || 'Failed to dispatch test alert' }
+      }));
+      setTimeout(() => {
+        setWebhookFeedback(prev => ({ ...prev, [projectId]: null }));
+      }, 5000);
+    } finally {
+      setTestingWebhook(prev => ({ ...prev, [projectId]: false }));
     }
   };
 
@@ -205,6 +253,88 @@ export default function Projects() {
                   {`<script src="http://localhost:5000/bugreplay.js" data-api-key="<YOUR_KEY>" defer></script>`}
                 </pre>
               </div>
+
+              {/* Webhook Alert Notifications */}
+              <div className="text-xs pt-1 border-t border-border-subtle">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center space-x-1.5 text-zinc-300 font-medium">
+                    <Bell className="w-3.5 h-3.5 text-zinc-400" />
+                    <span>Incident Webhook Alerts</span>
+                  </div>
+                  {editingWebhookId !== proj.id && (
+                    <button
+                      onClick={() => {
+                        setEditingWebhookId(proj.id);
+                        setTempWebhookUrl(proj.webhook_url || '');
+                      }}
+                      className="text-[11px] text-blue-400 hover:text-blue-300"
+                    >
+                      {proj.webhook_url ? 'Change' : '+ Add Webhook'}
+                    </button>
+                  )}
+                </div>
+
+                {editingWebhookId === proj.id ? (
+                  <div className="space-y-2">
+                    <input
+                      type="url"
+                      placeholder="https://hooks.slack.com/services/... or Discord webhook"
+                      value={tempWebhookUrl}
+                      onChange={(e) => setTempWebhookUrl(e.target.value)}
+                      className="w-full px-2.5 py-1.5 bg-background border border-border rounded text-[11px] text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500"
+                    />
+                    <div className="flex items-center justify-end space-x-2">
+                      <button
+                        type="button"
+                        onClick={() => setEditingWebhookId(null)}
+                        className="px-2 py-1 rounded bg-surface-elevated border border-border text-[11px] text-zinc-400 hover:text-white"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSaveWebhook(proj.id)}
+                        className="px-2.5 py-1 rounded bg-blue-600 hover:bg-blue-500 text-[11px] font-semibold text-white"
+                      >
+                        Save
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col space-y-2">
+                    <div className="flex items-center justify-between bg-background px-3 py-1.5 rounded border border-border">
+                      <span className="font-mono text-[11px] text-zinc-400 truncate max-w-[280px]">
+                        {proj.webhook_url || 'No webhook configured'}
+                      </span>
+                      {proj.webhook_url && (
+                        <button
+                          onClick={() => handleTestWebhook(proj.id)}
+                          disabled={testingWebhook[proj.id]}
+                          className="shrink-0 ml-2 px-2 py-0.5 rounded bg-surface-elevated hover:bg-zinc-700 border border-border text-[10px] font-medium text-zinc-300 hover:text-white flex items-center space-x-1 disabled:opacity-50"
+                        >
+                          <Send className="w-2.5 h-2.5" />
+                          <span>{testingWebhook[proj.id] ? 'Testing...' : 'Test'}</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {webhookFeedback[proj.id] && (
+                      <div className={`p-2 rounded text-[11px] flex items-center space-x-1.5 ${
+                        webhookFeedback[proj.id].type === 'success' 
+                          ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400' 
+                          : 'bg-red-500/10 border border-red-500/30 text-red-400'
+                      }`}>
+                        {webhookFeedback[proj.id].type === 'success' ? (
+                          <Check className="w-3.5 h-3.5 shrink-0" />
+                        ) : (
+                          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                        )}
+                        <span>{webhookFeedback[proj.id].message}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           ))}
         </div>
@@ -243,6 +373,20 @@ export default function Projects() {
                 />
                 <span className="text-[10px] text-zinc-500 block mt-1">
                   Use * to allow all origins, or comma-separated domains.
+                </span>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-zinc-300 mb-1">Webhook Alert URL (Optional)</label>
+                <input
+                  type="url"
+                  placeholder="e.g. Slack incoming webhook or Discord webhook"
+                  value={webhookUrl}
+                  onChange={(e) => setWebhookUrl(e.target.value)}
+                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500"
+                />
+                <span className="text-[10px] text-zinc-500 block mt-1">
+                  Receive instant notifications in Slack, Discord, or your endpoint when incidents are captured.
                 </span>
               </div>
 

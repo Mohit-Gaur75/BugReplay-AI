@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { getDb } from '../../db/db.js';
 import { generateApiKey, hashApiKey } from '../../utils/crypto.js';
+import { WebhookNotifier } from '../../services/webhookNotifier.js';
 
 const PLAN_PROJECT_LIMITS = {
   FREE: 1,
@@ -9,7 +10,7 @@ const PLAN_PROJECT_LIMITS = {
 };
 
 export class ProjectsService {
-  static createProject(userId, userPlanTier, { name, allowed_domains = '*' }) {
+  static createProject(userId, userPlanTier, { name, allowed_domains = '*', webhook_url = null }) {
     const db = getDb();
 
     // Check project limit for user plan tier
@@ -30,15 +31,16 @@ export class ProjectsService {
     const apiKeyPrefix = rawApiKey.slice(0, 16) + '...';
 
     db.prepare(`
-      INSERT INTO projects (id, user_id, name, api_key_hash, api_key_prefix, allowed_domains)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(projectId, userId, name, apiKeyHash, apiKeyPrefix, allowed_domains);
+      INSERT INTO projects (id, user_id, name, api_key_hash, api_key_prefix, allowed_domains, webhook_url)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(projectId, userId, name, apiKeyHash, apiKeyPrefix, allowed_domains, webhook_url || null);
 
     // Return raw key once to developer
     return {
       id: projectId,
       name,
       allowed_domains,
+      webhook_url,
       api_key_prefix: apiKeyPrefix,
       api_key: rawApiKey,
       warning: 'Store this API key securely. It will never be shown again.',
@@ -56,6 +58,7 @@ export class ProjectsService {
         p.name,
         p.api_key_prefix,
         p.allowed_domains,
+        p.webhook_url,
         p.created_at,
         COUNT(DISTINCT i.id) as incident_count,
         COALESCE(u.incident_count, 0) as monthly_usage
@@ -80,6 +83,7 @@ export class ProjectsService {
         p.name,
         p.api_key_prefix,
         p.allowed_domains,
+        p.webhook_url,
         p.created_at,
         COUNT(DISTINCT i.id) as incident_count,
         COALESCE(u.incident_count, 0) as monthly_usage
@@ -101,7 +105,7 @@ export class ProjectsService {
     return project;
   }
 
-  static updateProject(userId, projectId, { name, allowed_domains }) {
+  static updateProject(userId, projectId, { name, allowed_domains, webhook_url }) {
     const db = getDb();
     const existing = db.prepare('SELECT id FROM projects WHERE id = ? AND user_id = ?').get(projectId, userId);
 
@@ -124,6 +128,10 @@ export class ProjectsService {
       updates.push('allowed_domains = ?');
       values.push(allowed_domains);
     }
+    if (webhook_url !== undefined) {
+      updates.push('webhook_url = ?');
+      values.push(webhook_url || null);
+    }
 
     if (updates.length > 0) {
       values.push(projectId, userId);
@@ -131,6 +139,33 @@ export class ProjectsService {
     }
 
     return this.getProjectById(userId, projectId);
+  }
+
+  static async testWebhook(userId, projectId) {
+    const project = this.getProjectById(userId, projectId);
+    if (!project.webhook_url) {
+      const error = new Error('Project does not have a webhook URL configured.');
+      error.statusCode = 400;
+      error.code = 'WEBHOOK_NOT_CONFIGURED';
+      error.isOperational = true;
+      throw error;
+    }
+
+    try {
+      await WebhookNotifier.sendTestAlert(project.webhook_url, project.name);
+    } catch (err) {
+      const error = new Error(`Webhook delivery failed: ${err.message}`);
+      error.statusCode = 502;
+      error.code = 'WEBHOOK_DELIVERY_FAILED';
+      error.isOperational = true;
+      throw error;
+    }
+
+    return { 
+      success: true, 
+      sent_at: new Date().toISOString(),
+      message: 'Test webhook notification delivered successfully.' 
+    };
   }
 
   static rotateApiKey(userId, projectId) {
