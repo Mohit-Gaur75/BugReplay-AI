@@ -14,7 +14,8 @@ import {
   ExternalLink,
   Bell,
   Send,
-  AlertCircle
+  AlertCircle,
+  GitBranch
 } from 'lucide-react';
 
 export default function Projects() {
@@ -27,6 +28,8 @@ export default function Projects() {
   const [projectName, setProjectName] = useState('');
   const [allowedDomains, setAllowedDomains] = useState('*');
   const [webhookUrl, setWebhookUrl] = useState('');
+  const [githubRepo, setGithubRepo] = useState('');
+  const [githubToken, setGithubToken] = useState('');
   const [creating, setCreating] = useState(false);
 
   // Webhook action states
@@ -64,6 +67,8 @@ export default function Projects() {
         name: projectName,
         allowed_domains: allowedDomains,
         webhook_url: webhookUrl.trim() || undefined,
+        github_repo: githubRepo.trim() || undefined,
+        github_token: githubToken.trim() || undefined,
       });
 
       const newProj = res.data?.project;
@@ -71,6 +76,8 @@ export default function Projects() {
       setProjectName('');
       setAllowedDomains('*');
       setWebhookUrl('');
+      setGithubRepo('');
+      setGithubToken('');
       fetchProjects();
 
       // Show raw API key once
@@ -335,6 +342,24 @@ export default function Projects() {
                   </div>
                 )}
               </div>
+
+              {/* GitHub Integration Status */}
+              <div className="text-xs pt-2 border-t border-border-subtle flex items-center justify-between">
+                <div className="flex items-center space-x-1.5 text-zinc-300 font-medium">
+                  <GitBranch className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>GitHub PR Integration:</span>
+                </div>
+                <div className="font-mono text-[11px]">
+                  {proj.github_repo ? (
+                    <span className="text-emerald-400 font-semibold flex items-center space-x-1">
+                      <span>{proj.github_repo}</span>
+                      {proj.has_github_token && <span className="text-[10px] text-zinc-500">(Token linked)</span>}
+                    </span>
+                  ) : (
+                    <span className="text-zinc-500">Optional</span>
+                  )}
+                </div>
+              </div>
             </div>
           ))}
         </div>
@@ -387,6 +412,31 @@ export default function Projects() {
                 />
                 <span className="text-[10px] text-zinc-500 block mt-1">
                   Receive instant notifications in Slack, Discord, or your endpoint when incidents are captured.
+                </span>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-zinc-300 mb-1">GitHub Repository (Optional)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. acme-corp/storefront"
+                  value={githubRepo}
+                  onChange={(e) => setGithubRepo(e.target.value)}
+                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-zinc-300 mb-1">GitHub Personal Access Token (Optional)</label>
+                <input
+                  type="password"
+                  placeholder="ghp_... for 1-click automated Pull Requests"
+                  value={githubToken}
+                  onChange={(e) => setGithubToken(e.target.value)}
+                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500 font-mono"
+                />
+                <span className="text-[10px] text-zinc-500 block mt-1">
+                  Enables opening automated Pull Requests with synthesized reproduction tests directly into your repo.
                 </span>
               </div>
 

@@ -40,6 +40,15 @@ export default function IncidentDetails({ incidentId, onBack }) {
   const [showPatchModal, setShowPatchModal] = useState(false);
   const [copiedPatch, setCopiedPatch] = useState(false);
 
+  // GitHub Pull Request Modal State
+  const [showPrModal, setShowPrModal] = useState(false);
+  const [prRepo, setPrRepo] = useState('');
+  const [prToken, setPrToken] = useState('');
+  const [prBaseBranch, setPrBaseBranch] = useState('main');
+  const [creatingPr, setCreatingPr] = useState(false);
+  const [prResult, setPrResult] = useState(null);
+  const [prError, setPrError] = useState(null);
+
   const fetchIncident = async () => {
     try {
       const res = await api.get(`/incidents/${incidentId}`);
@@ -78,6 +87,24 @@ export default function IncidentDetails({ incidentId, onBack }) {
     } catch (err) {
       alert(`Could not regenerate test: ${err.message}`);
       setRegenerating(false);
+    }
+  };
+
+  const handleCreatePr = async (e) => {
+    e.preventDefault();
+    setCreatingPr(true);
+    setPrError(null);
+    try {
+      const res = await api.post(`/incidents/${incidentId}/create-pr`, {
+        repo: prRepo,
+        token: prToken || undefined,
+        baseBranch: prBaseBranch || 'main',
+      });
+      setPrResult(res.data);
+    } catch (err) {
+      setPrError(err.message || 'Failed to create GitHub Pull Request');
+    } finally {
+      setCreatingPr(false);
     }
   };
 
@@ -133,6 +160,19 @@ export default function IncidentDetails({ incidentId, onBack }) {
 
         {/* Action Controls & Status Dropdown */}
         <div className="flex items-center space-x-3">
+          <button
+            onClick={() => {
+              setPrRepo(incident.github_repo || '');
+              setPrResult(null);
+              setPrError(null);
+              setShowPrModal(true);
+            }}
+            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium transition-colors shadow-sm"
+          >
+            <GitBranch className="w-3.5 h-3.5" />
+            <span>Create GitHub PR</span>
+          </button>
+
           <button
             onClick={() => setShowGithubModal(true)}
             className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-surface border border-border hover:bg-surface-elevated text-zinc-300 hover:text-white text-xs font-medium transition-colors shadow-sm"
@@ -474,6 +514,128 @@ npx bugreplay run ${incident.id} --headed
                 <span>Download .patch</span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Automated GitHub Pull Request Generator */}
+      {showPrModal && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-surface border border-border rounded-xl p-6 max-w-lg w-full shadow-2xl flex flex-col">
+            <div className="flex items-center justify-between pb-3 border-b border-border">
+              <div className="flex items-center space-x-2">
+                <div className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                  <GitBranch className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Create GitHub Pull Request</h3>
+                  <p className="text-[11px] text-zinc-400">Pushes reproduction test suite and opens PR automatically</p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setShowPrModal(false)}
+                className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {prResult ? (
+              <div className="my-6 space-y-4 text-center">
+                <div className="w-12 h-12 rounded-full bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 flex items-center justify-center mx-auto">
+                  <CheckCircle2 className="w-6 h-6" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-white">Pull Request #{prResult.pullRequestNumber} Created!</h4>
+                  <p className="text-xs text-zinc-400 mt-1">Branch <span className="font-mono text-emerald-400">{prResult.branch}</span> pushed to GitHub.</p>
+                </div>
+                <div className="p-3 bg-background border border-border rounded-lg text-xs font-mono text-zinc-300 break-all">
+                  {prResult.pullRequestUrl}
+                </div>
+                <div className="flex items-center justify-center space-x-3 pt-2">
+                  <a
+                    href={prResult.pullRequestUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center space-x-1.5 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-sm transition-colors"
+                  >
+                    <span>View Pull Request on GitHub</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                  <button
+                    onClick={() => setShowPrModal(false)}
+                    className="px-4 py-2 rounded-lg bg-surface border border-border text-zinc-300 hover:text-white text-xs font-medium"
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleCreatePr} className="my-4 space-y-4">
+                {prError && (
+                  <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-400 text-xs rounded-lg">
+                    {prError}
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-300 mb-1">GitHub Repository (owner/repo)</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. acme-corp/storefront"
+                    value={prRepo}
+                    onChange={(e) => setPrRepo(e.target.value)}
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500 font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-300 mb-1">
+                    GitHub Personal Access Token (PAT)
+                  </label>
+                  <input
+                    type="password"
+                    placeholder="ghp_... (leave empty if configured on project)"
+                    value={prToken}
+                    onChange={(e) => setPrToken(e.target.value)}
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500 font-mono"
+                  />
+                  <p className="text-[10px] text-zinc-500 mt-1">
+                    Requires repo write permission to create branch and commit test file.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-300 mb-1">Base Branch</label>
+                  <input
+                    type="text"
+                    value={prBaseBranch}
+                    onChange={(e) => setPrBaseBranch(e.target.value)}
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end space-x-2 pt-3 border-t border-border">
+                  <button
+                    type="button"
+                    onClick={() => setShowPrModal(false)}
+                    className="px-3 py-1.5 rounded-lg bg-surface border border-border text-zinc-400 hover:text-white text-xs font-medium"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={creatingPr}
+                    className="flex items-center space-x-1.5 px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-semibold shadow-sm transition-colors"
+                  >
+                    <GitBranch className={`w-3.5 h-3.5 ${creatingPr ? 'animate-spin' : ''}`} />
+                    <span>{creatingPr ? 'Opening Pull Request...' : 'Open Pull Request'}</span>
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

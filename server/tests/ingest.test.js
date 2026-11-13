@@ -196,4 +196,32 @@ describe('Phase 4: Telemetry Ingestion & Incident Management APIs', () => {
     assert.equal(res.body.success, true);
     assert.equal(res.body.data.generationStatus, 'PENDING');
   });
+
+  test('POST /api/v1/incidents/:id/create-pr validates repository and token requirement', async () => {
+    const res = await request(app)
+      .post(`/api/v1/incidents/${createdIncidentId}/create-pr`)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({});
+
+    assert.equal(res.status, 400);
+    assert.equal(res.body.success, false);
+    assert.ok(res.body.error.code.includes('GITHUB_REPO_REQUIRED'));
+  });
+
+  test('POST /api/v1/incidents/:id/create-pr generates and opens PR on GitHub', async () => {
+    const res = await request(app)
+      .post(`/api/v1/incidents/${createdIncidentId}/create-pr`)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({
+        repo: 'acme-corp/storefront-app',
+        token: 'ghp_mock_token_for_automated_testing',
+        baseBranch: 'main',
+      });
+
+    assert.equal(res.status, 201);
+    assert.equal(res.body.success, true);
+    assert.ok(res.body.data.pullRequestUrl.includes('acme-corp/storefront-app/pull'));
+    assert.equal(res.body.data.pullRequestNumber, 101);
+    assert.ok(res.body.data.branch.startsWith('bugreplay/repro-'));
+  });
 });

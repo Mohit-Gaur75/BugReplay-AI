@@ -24,11 +24,11 @@ The current implementation encompasses:
 - [x] **Multi-Framework Test Export (Cypress & Puppeteer):** Interactive framework switcher tab in dashboard allowing instant conversion and download of tests as Playwright (`.spec.js`), Cypress (`.cy.js`), or Puppeteer (`.js`).
 - [x] **Enhanced Network Payload Capture:** Configurable allowlist (`data-capture-body-urls` / `captureBodyUrls`) for request/response bodies with automated PII & credit-card redaction, improving route mocking fidelity for complex GraphQL and REST APIs.
 
-### v1.2 — Developer Tools & Synthesis Acceleration (Current)
+### v1.2 — Developer Tools & Synthesis Acceleration (Current Release)
 - [x] **1-Click cURL Reproduction:** Instant cURL command generator with captured headers, method, and allowlisted payload data.
 - [x] **Component Test Synthesis (React Testing Library):** Converts Playwright telemetry into `@testing-library/react` + `vitest` unit tests with mocked global `fetch`.
 - [x] **Unified Git Patch (`fix.patch`) Generator:** Exports a standardized Git patch with test reproduction suite ready for `git apply fix.patch`.
-- [ ] **Automated Fix PR Generator:** Direct GitHub Pull Request creation via GitHub REST API using repository PAT.
+- [x] **Automated Fix PR Generator:** Direct GitHub Pull Request creation via GitHub REST API pushing synthesized `.spec.js` test suites and opening PRs directly in the user's repository.
 
 ---
 

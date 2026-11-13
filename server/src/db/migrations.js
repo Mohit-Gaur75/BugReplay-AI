@@ -127,6 +127,18 @@ const migrationsList = [
         db.exec(`ALTER TABLE projects ADD COLUMN webhook_url TEXT DEFAULT NULL;`);
       }
     }
+  },
+  {
+    name: '003_add_github_to_projects',
+    up: (db) => {
+      const columns = db.prepare("PRAGMA table_info('projects')").all().map((c) => c.name);
+      if (!columns.includes('github_repo')) {
+        db.exec(`ALTER TABLE projects ADD COLUMN github_repo TEXT DEFAULT NULL;`);
+      }
+      if (!columns.includes('github_token')) {
+        db.exec(`ALTER TABLE projects ADD COLUMN github_token TEXT DEFAULT NULL;`);
+      }
+    }
   }
 ];
 

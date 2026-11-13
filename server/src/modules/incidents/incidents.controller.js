@@ -67,4 +67,14 @@ export class IncidentsController {
       next(err);
     }
   }
+
+  static async createPR(req, res, next) {
+    try {
+      const { repo, token, baseBranch } = req.body || {};
+      const result = await IncidentsService.createGitHubPR(req.user.id, req.params.id, { repo, token, baseBranch });
+      return successResponse(res, result, 'GitHub Pull Request created successfully', 201);
+    } catch (err) {
+      next(err);
+    }
+  }
 }

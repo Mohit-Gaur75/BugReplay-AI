@@ -10,7 +10,7 @@ const PLAN_PROJECT_LIMITS = {
 };
 
 export class ProjectsService {
-  static createProject(userId, userPlanTier, { name, allowed_domains = '*', webhook_url = null }) {
+  static createProject(userId, userPlanTier, { name, allowed_domains = '*', webhook_url = null, github_repo = null, github_token = null }) {
     const db = getDb();
 
     // Check project limit for user plan tier
@@ -31,9 +31,9 @@ export class ProjectsService {
     const apiKeyPrefix = rawApiKey.slice(0, 16) + '...';
 
     db.prepare(`
-      INSERT INTO projects (id, user_id, name, api_key_hash, api_key_prefix, allowed_domains, webhook_url)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(projectId, userId, name, apiKeyHash, apiKeyPrefix, allowed_domains, webhook_url || null);
+      INSERT INTO projects (id, user_id, name, api_key_hash, api_key_prefix, allowed_domains, webhook_url, github_repo, github_token)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(projectId, userId, name, apiKeyHash, apiKeyPrefix, allowed_domains, webhook_url || null, github_repo || null, github_token || null);
 
     // Return raw key once to developer
     return {
@@ -41,6 +41,8 @@ export class ProjectsService {
       name,
       allowed_domains,
       webhook_url,
+      github_repo,
+      has_github_token: !!github_token,
       api_key_prefix: apiKeyPrefix,
       api_key: rawApiKey,
       warning: 'Store this API key securely. It will never be shown again.',
@@ -59,6 +61,8 @@ export class ProjectsService {
         p.api_key_prefix,
         p.allowed_domains,
         p.webhook_url,
+        p.github_repo,
+        CASE WHEN p.github_token IS NOT NULL THEN 1 ELSE 0 END as has_github_token,
         p.created_at,
         COUNT(DISTINCT i.id) as incident_count,
         COALESCE(u.incident_count, 0) as monthly_usage
@@ -84,6 +88,8 @@ export class ProjectsService {
         p.api_key_prefix,
         p.allowed_domains,
         p.webhook_url,
+        p.github_repo,
+        CASE WHEN p.github_token IS NOT NULL THEN 1 ELSE 0 END as has_github_token,
         p.created_at,
         COUNT(DISTINCT i.id) as incident_count,
         COALESCE(u.incident_count, 0) as monthly_usage
@@ -105,7 +111,7 @@ export class ProjectsService {
     return project;
   }
 
-  static updateProject(userId, projectId, { name, allowed_domains, webhook_url }) {
+  static updateProject(userId, projectId, { name, allowed_domains, webhook_url, github_repo, github_token }) {
     const db = getDb();
     const existing = db.prepare('SELECT id FROM projects WHERE id = ? AND user_id = ?').get(projectId, userId);
 
@@ -131,6 +137,14 @@ export class ProjectsService {
     if (webhook_url !== undefined) {
       updates.push('webhook_url = ?');
       values.push(webhook_url || null);
+    }
+    if (github_repo !== undefined) {
+      updates.push('github_repo = ?');
+      values.push(github_repo || null);
+    }
+    if (github_token !== undefined) {
+      updates.push('github_token = ?');
+      values.push(github_token || null);
     }
 
     if (updates.length > 0) {
