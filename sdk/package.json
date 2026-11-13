@@ -6,7 +6,7 @@
   "main": "src/bugreplay.js",
   "scripts": {
     "build": "node scripts/build.js",
-    "test": "node --test tests/**/*.test.js"
+    "test": "node --test"
   },
   "keywords": [
     "bugreplay",
