@@ -135,7 +135,8 @@
   ```json
   {
     "name": "Checkout Service",
-    "allowed_domains": "https://checkout.acme.com"
+    "allowed_domains": "https://checkout.acme.com",
+    "webhook_url": "https://hooks.slack.com/services/T00/B00/XXXX"
   }
   ```
 - **Response (201 Created):**
@@ -147,6 +148,7 @@
         "id": "prj_23456789-bcde-f012-3456-789abcdef012",
         "name": "Checkout Service",
         "allowed_domains": "https://checkout.acme.com",
+        "webhook_url": "https://hooks.slack.com/services/T00/B00/XXXX",
         "api_key": "br_live_9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c",
         "warning": "Copy this API key now. It will not be shown again."
       }
@@ -170,15 +172,31 @@
 
 ### 2.4. Update Project
 - **Endpoint:** `PATCH /api/v1/projects/:id`
+- **Headers:** `Authorization: Bearer <token>`
 - **Request Body:**
   ```json
   {
     "name": "Checkout Service V2",
-    "allowed_domains": "https://app.acme.com,https://staging.acme.com"
+    "allowed_domains": "https://app.acme.com,https://staging.acme.com",
+    "webhook_url": "https://discord.com/api/webhooks/..."
   }
   ```
 
-### 2.5. Delete Project
+### 2.5. Test Webhook Alert
+- **Endpoint:** `POST /api/v1/projects/:id/test-webhook`
+- **Headers:** `Authorization: Bearer <token>`
+- **Response (200 OK):**
+  ```json
+  {
+    "success": true,
+    "data": {
+      "sent_at": "2026-11-13T08:50:00.000Z",
+      "message": "Test webhook notification delivered successfully."
+    }
+  }
+  ```
+
+### 2.6. Delete Project
 - **Endpoint:** `DELETE /api/v1/projects/:id`
 - **Response (200 OK):**
   ```json
