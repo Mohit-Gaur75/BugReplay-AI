@@ -18,10 +18,11 @@ The current implementation encompasses:
 
 ## 2. Near-Term Milestones (v1.1 - v1.2)
 
-### v1.1 — Team Collaboration & Alerting (Q1 2027)
-- **Slack & Discord Webhook Alerts:** Real-time notifications when a new production incident is captured, complete with AI root cause summary and 1-click Playwright test copy.
-- **GitHub Issues Integration:** Automatically create a GitHub issue containing the generated `.spec.js` file and reproduction steps with a single click.
-- **Enhanced Network Payload Capture:** Configurable allowlist for non-sensitive request/response bodies to improve route mocking fidelity for complex GraphQL and REST schemas.
+### v1.1 — Team Collaboration & Multi-Framework Export (Released)
+- [x] **Slack & Discord Webhook Alerts:** Real-time notifications when a new production incident is captured, complete with AI root cause summary and 1-click Playwright test copy.
+- [x] **GitHub Issues 1-Click Export:** Automatically generates formatted Markdown issue reports containing the error stack, AI diagnosis, suggested fix, and reproduction tests with direct link to GitHub.
+- [x] **Multi-Framework Test Export (Cypress & Puppeteer):** Interactive framework switcher tab in dashboard allowing instant conversion and download of tests as Playwright (`.spec.js`), Cypress (`.cy.js`), or Puppeteer (`.js`).
+- [ ] **Enhanced Network Payload Capture:** Configurable allowlist for non-sensitive request/response bodies to improve route mocking fidelity for complex GraphQL schemas.
 
 ### v1.2 — Multi-Framework Test Synthesis (Q2 2027)
 - **Cypress & Puppeteer Export:** Support toggling test output between `@playwright/test`, `cypress`, and `puppeteer`.
