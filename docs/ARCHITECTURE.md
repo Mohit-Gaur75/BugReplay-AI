@@ -1,15 +1,14 @@
 # BugReplay AI — System Architecture Specification
 
-## 1. Architectural Philosophy
+## 1. System Topology & Architectural Philosophy
 
-BugReplay AI is designed on three core engineering principles:
-1. **Zero Client Performance Overhead:** The browser SDK must never degrade the host application's performance. It executes asynchronously, uses an $O(1)$ circular ring buffer capped at 15 items, and relies on non-blocking beacon transports (`navigator.sendBeacon`).
-2. **Zero-Leak PII Privacy:** User passwords, credit cards, CVVs, and designated sensitive fields are sanitized in memory *before* being recorded in the ring buffer. Sensitive headers (such as `Authorization` and `Cookie`) are stripped from network logs.
-3. **Deterministic Reliability:** AI provides intelligent root-cause diagnosis, but test generation must never fail if an external LLM is unreachable or out of quota. The backend guarantees 100% test synthesis through an intelligent deterministic fallback engine.
+BugReplay AI is built as a **modular monolith** with clean logical separation between:
+- **Client Capture SDK (`sdk/`)**: Zero-dependency browser package.
+- **Backend API & Ingestion Engine (`server/`)**: Express.js with ES Modules, SQLite WAL storage, and durable background job queue.
+- **Frontend Dashboard (`client/`)**: React 19 + Vite + Tailwind CSS high-contrast UI.
+- **Local Reproduction CLI (`cli/`)**: Developer terminal companion tool.
 
----
-
-## 2. End-to-End System Architecture
+### Architecture Topology
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
@@ -29,9 +28,9 @@ BugReplay AI is designed on three core engineering principles:
 │                 └────────────┬─────────────┘                           │
 │                              ▼                                         │
 │                 ┌──────────────────────────┐                           │
-│                 │  Rolling Ring Buffer     │ (Fixed Capacity: 15)      │
+│                 │  Rolling Ring Buffer     │ (Capacity: 15 Events)     │
 │                 └────────────┬─────────────┘                           │
-│                              │ On Unhandled Exception / Manual Report   │
+│                              │ On Unhandled Error / Manual Report      │
 │                              ▼                                         │
 │                 ┌──────────────────────────┐                           │
 │                 │ Telemetry Dispatcher     │                           │
@@ -49,142 +48,83 @@ BugReplay AI is designed on three core engineering principles:
 │   └──────────────────────────────┬────────────────────────────────┘    │
 │                                  ▼                                     │
 │   ┌───────────────────────────────────────────────────────────────┐    │
-│   │ Project & Quota Gatekeeper (Validate API Key, Monthly Quota)  │    │
+│   │ API Key Hash Validator (SHA-256 against projects.api_key_hash)│    │
+│   │ Allowed Domains & Quota Gatekeeper                            │    │
 │   └──────────────────────────────┬────────────────────────────────┘    │
 │                                  ▼                                     │
 │   ┌───────────────────────────────────────────────────────────────┐    │
-│   │ Playwright Synthesis Engine                                   │    │
-│   │  ├── Route Mocking Generator (Fulfill 4xx/500 responses)      │    │
-│   │  ├── Locator & Interaction Step Generator                     │    │
-│   │  ├── Error Assertion Synthesizer                              │    │
-│   │  └── Gemini 2.0 Flash / Heuristic Diagnostic Engine           │    │
+│   │ Persistent Storage (better-sqlite3 in WAL mode)               │    │
+│   │  • Insert Incident (generation_status: 'PENDING')             │    │
+│   │  • Increment Usage Record (Transactionally)                   │    │
+│   │  • Enqueue Job into 'jobs' table                              │    │
+│   │  • Respond HTTP 202 Accepted immediately                      │    │
 │   └──────────────────────────────┬────────────────────────────────┘    │
 │                                  ▼                                     │
 │   ┌───────────────────────────────────────────────────────────────┐    │
-│   │ SQLite Storage Engine (WAL Mode via better-sqlite3)           │    │
-│   │  ├── users, projects, incidents, quotas                       │    │
+│   │ Durable Background AI Job Worker                              │    │
+│   │  • Polls jobs table with retry & exponential backoff          │    │
+│   │  • Primary: Gemini API with structured JSON output            │    │
+│   │  • Fallback: Deterministic Heuristic Synthesizer (offline)    │    │
+│   │  • Updates incident with Playwright test & AI Root Cause      │    │
 │   └───────────────────────────────────────────────────────────────┘    │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 3. Telemetry Event Schema
+## 2. Telemetry Ingestion & PII Masking Pipeline
 
-The client ring buffer captures events conforming to the following typed JSON structures:
+### Client-Side PII Masking
+1. **Target Attributes:** Form controls with `type="password"`, `name="card"`, `name="cvv"`, `name="ssn"`, `data-private`, or `data-mask` are immediately replaced with `[REDACTED_PII]`.
+2. **Card Pattern Matching:** Luhn-valid 13-19 digit card patterns in text or network bodies are masked with `••••-••••-••••-••••`.
+3. **Sensitive Header Stripping:** `Authorization`, `Proxy-Authorization`, `Cookie`, `Set-Cookie`, `X-Api-Key` are deleted before network entries are stored.
+4. **URL Sanitization:** Query parameters matching `token`, `secret`, `key`, `auth`, `password` are redacted.
 
-### 3.1. Click Event
-```json
-{
-  "type": "click",
-  "timestamp": 1710328492000,
-  "tagName": "BUTTON",
-  "id": "checkout-submit",
-  "className": "btn btn-primary px-4",
-  "selector": "button#checkout-submit",
-  "innerText": "Place Order ($49.00)",
-  "xpath": "//button[@id='checkout-submit']",
-  "coordinates": { "x": 420, "y": 890 }
-}
-```
-
-### 3.2. Network Event (Fetch/XHR)
-```json
-{
-  "type": "network",
-  "timestamp": 1710328492500,
-  "method": "POST",
-  "url": "/api/v1/checkout",
-  "status": 500,
-  "durationMs": 245,
-  "requestBody": {
-    "itemCount": 2,
-    "paymentToken": "[REDACTED_PII]"
-  },
-  "responseBody": {
-    "error": "PaymentGatewayTimeout",
-    "code": "PG_TIMEOUT_504"
-  }
-}
-```
-
-### 3.3. Console Event
-```json
-{
-  "type": "console",
-  "timestamp": 1710328492750,
-  "level": "error",
-  "message": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
-}
-```
-
-### 3.4. Navigation Event
-```json
-{
-  "type": "navigation",
-  "timestamp": 1710328485000,
-  "from": "https://app.example.com/cart",
-  "to": "https://app.example.com/checkout"
-}
-```
-
-### 3.5. Unhandled Crash Event
-```json
-{
-  "type": "crash",
-  "timestamp": 1710328493000,
-  "errorType": "TypeError",
-  "message": "Cannot read properties of undefined (reading 'transactionId')",
-  "stack": "TypeError: Cannot read properties of undefined (reading 'transactionId')\n    at handleCheckoutResponse (checkout.js:84:22)\n    at async onSubmit (checkout.js:112:9)",
-  "pageUrl": "https://app.example.com/checkout",
-  "viewport": "1440x900",
-  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36..."
-}
-```
+### Server-Side Secondary Scrubbing
+All incoming telemetry is validated using Zod schemas and subjected to a secondary server-side regex scrubber before database insertion.
 
 ---
 
-## 4. PII Scrubbing & Data Hygiene Engine
+## 3. Storage Layer: SQLite with WAL Mode
 
-Data protection is enforced at the edge before storage:
-1. **Attribute-Based Masking:**
-   - Elements with `type="password"`, `type="hidden"` (if name contains secret tokens).
-   - Elements with attributes `data-private`, `data-mask`, `data-testid="*sensitive*"` have input values replaced with `[REDACTED_PII]`.
-   - Form fields with name or id matching: `/password|passwd|card|credit|cvv|cvc|ssn|secret|token|auth/i`.
-2. **Text Regex Scrubbing:**
-   - **Credit Card Numbers:** Matched against Luhn-valid 13-19 digit card patterns: `\b(?:\d[ -]*?){13,19}\b`.
-   - **Email Addresses:** (Optional toggle, partially masked as `j***@domain.com`).
-   - **Bearer Tokens:** Matches `Bearer [A-Za-z0-9\-._~+/]+=*`.
-3. **HTTP Header Stripping:**
-   - `Authorization`, `Proxy-Authorization`, `Cookie`, `Set-Cookie`, `X-Api-Key` are automatically stripped from any network logging telemetry.
-
----
-
-## 5. Storage Architecture (SQLite with WAL Mode)
-
-BugReplay AI leverages SQLite via `better-sqlite3` configured with:
+BugReplay AI uses `better-sqlite3` configured with:
 ```sql
 PRAGMA journal_mode = WAL;
 PRAGMA synchronous = NORMAL;
 PRAGMA foreign_keys = ON;
+PRAGMA busy_timeout = 5000;
 PRAGMA temp_store = MEMORY;
-PRAGMA cache_size = -64000; -- 64MB cache
+PRAGMA cache_size = -64000;
 ```
 
-### Advantages for Solo-Founder Zero-Cost Deployment:
-- **No Database Hosting Fees:** Can be hosted on any persistent disk container (Render, Railway, Fly.io, VPS) with 0 database cloud cost.
-- **Microsecond Latencies:** In-process C++ bindings eliminate network latency between backend and database.
-- **High Concurrency:** WAL (Write-Ahead Logging) allows concurrent read transactions to execute without being blocked by write transactions.
-- **Zero Configuration:** Database files are portable, backupable via standard file copying, and easily verifiable.
+### High-Concurrency & Zero-Cost Benefits:
+- **No Hosting Cost:** Stored on local disk or persistent container volume ($0/month).
+- **WAL Concurrency:** Readers do not block writers, and writers do not block readers.
+- **Fast Transactions:** In-process C++ bindings execute in microseconds without TCP/network overhead.
+- **Busy Timeout:** 5,000ms timeout prevents `SQLITE_BUSY` errors during concurrent bursts.
 
 ---
 
-## 6. Threat Model & Security Controls
+## 4. Asynchronous Synthesis Engine & Job Queue
 
-| Threat Vector | Mitigation Strategy |
+To ensure the Ingestion API maintains sub-50ms response times:
+1. `POST /api/v1/ingest` persists the raw incident and inserts a record into the `jobs` table:
+   ```json
+   { "type": "AI_SYNTHESIS", "payload": { "incidentId": "UUID" }, "status": "PENDING" }
+   ```
+2. The endpoint responds immediately with `HTTP 202 Accepted`.
+3. A background job runner polls the `jobs` table, processes synthesis, and updates `generation_status` to `COMPLETED` (or `FAILED` if retries exceed 3).
+4. **Failure Resiliency:** A failure in the AI module will **never** delete or corrupt the stored incident record.
+
+---
+
+## 5. Security Threat Model
+
+| Threat | Mitigation |
 | :--- | :--- |
-| **Telemetry Ingestion Spam** | Ingestion endpoints are rate-limited (100 req/min per IP, 500 req/min per project). API keys are hashed in cache for lookup. |
-| **Cross-Origin Telemetry Abuse** | The `projects` table maintains an `allowed_domains` field. Ingestion verifies the incoming `Origin` and `Referer` headers match project configurations. |
-| **SQL Injection** | All SQL queries are strictly compiled using parameterized queries (`better-sqlite3` prepared statements). |
-| **Cross-Site Scripting (XSS)** | React auto-escapes user telemetry rendered in the dashboard. Code snippets are rendered through specialized syntax highlighters without `dangerouslySetInnerHTML`. |
-| **Authentication & Session Hijacking** | JWTs with expiration (7 days), signed with high-entropy HMAC-SHA256 secrets. Passwords hashed using `bcrypt` (10 rounds). |
+| **API Key Theft from Database** | Raw keys (`br_live_...`) are never stored. Only their SHA-256 hash is persisted in the database. |
+| **Ingestion Abuse / Flooding** | Per-IP rate limiting (100 req/min), per-project rate limiting (500 req/min), and strict monthly plan quotas. |
+| **Cross-Origin Telemetry Hijacking** | Projects specify `allowed_domains` which are verified against incoming `Origin` and `Referer` headers. |
+| **SQL Injection** | 100% parameterized queries using `better-sqlite3` prepared statements. |
+| **Cross-User Data Leakage** | All database queries on projects, incidents, and settings enforce `WHERE user_id = ?` or `WHERE project_id IN (SELECT id FROM projects WHERE user_id = ?)`. |
+| **Untrusted Code Execution** | AI-generated Playwright scripts are stored as text and executed only by the developer on their local machine via the CLI. The backend never executes generated test code. |
