@@ -90,6 +90,37 @@ describe('Phase 5: AI & Playwright Synthesis Engine + Durable Queue Worker', () 
     assert.ok(result.playwrightTest.includes('expect(errorIndicator'));
   });
 
+  test('Synthesizer handles allowlisted GraphQL & POST requestBody in route mocking and diagnosis', () => {
+    const mockIncident = {
+      id: 'inc-graphql-9912',
+      error_message: "GraphQL Error: Cart checkout failed",
+      error_type: 'GraphQLError',
+      error_stack: 'GraphQLError: Cart checkout failed\n    at mutateCart (cart.js:33)',
+      page_url: 'http://localhost:5173/shop',
+      viewport: '1440x900',
+    };
+
+    const mockTelemetry = [
+      {
+        type: 'network',
+        method: 'POST',
+        url: 'http://localhost:5173/api/v1/graphql',
+        status: 500,
+        requestBody: {
+          operationName: 'CheckoutCartMutation',
+          query: 'mutation CheckoutCartMutation { checkout { id } }',
+          variables: { cartId: 'c_123' },
+        },
+        responseBody: { errors: [{ message: 'Cart expired' }] },
+      },
+    ];
+
+    const result = Synthesizer.synthesizeHeuristic(mockIncident, mockTelemetry);
+    assert.ok(result.playwrightTest.includes('CheckoutCartMutation'));
+    assert.ok(result.playwrightTest.includes('Cart expired'));
+    assert.ok(result.explanation.includes('CheckoutCartMutation') || result.explanation.includes('operationName'));
+  });
+
   test('Background worker picks up queued job and completes synthesis on incident record', async () => {
     // 1. Ingest incident
     const ingestRes = await request(app)

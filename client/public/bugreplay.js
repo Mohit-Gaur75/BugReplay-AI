@@ -86,6 +86,42 @@
     return url.replace(SENSITIVE_PARAM_REGEX, '$1=[REDACTED_PII]');
   }
 
+  function scrubPayload(data, depth = 0) {
+    if (data === null || data === undefined) return null;
+    if (depth > 5) return '[NESTED_PAYLOAD_TRUNCATED]';
+
+    if (typeof data === 'string') {
+      const trimmed = data.trim();
+      if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          return scrubPayload(parsed, depth + 1);
+        } catch (e) {
+          // not valid JSON, treat as text
+        }
+      }
+      return scrubText(data.length > 2000 ? data.slice(0, 2000) + '...[truncated]' : data);
+    }
+
+    if (Array.isArray(data)) {
+      return data.slice(0, 50).map((item) => scrubPayload(item, depth + 1));
+    }
+
+    if (typeof data === 'object') {
+      const result = {};
+      for (const key of Object.keys(data)) {
+        if (SENSITIVE_ATTR_REGEX.test(key) || /api[_-]?key|bearer|private[_-]?key/i.test(key)) {
+          result[key] = '[REDACTED_PII]';
+        } else {
+          result[key] = scrubPayload(data[key], depth + 1);
+        }
+      }
+      return result;
+    }
+
+    return data;
+  }
+
   function getSafeSelector(el) {
     if (!el || el.nodeType !== Node.ELEMENT_NODE) return '';
 
@@ -137,6 +173,7 @@
       this.captureConsole = true;
       this.captureNetwork = true;
       this.captureClicks = true;
+      this.captureBodyUrls = [];
       this.buffer = new RingBuffer(15);
       this.isSubmitting = false;
       this.lastSentErrorFingerprint = null;
@@ -149,6 +186,16 @@
       this.captureConsole = options.captureConsole !== false;
       this.captureNetwork = options.captureNetwork !== false;
       this.captureClicks = options.captureClicks !== false;
+
+      const scriptBodyUrls = this.extractScriptCaptureBodyUrls();
+      const rawBodyUrls = options.captureBodyUrls !== undefined ? options.captureBodyUrls : scriptBodyUrls;
+      if (Array.isArray(rawBodyUrls)) {
+        this.captureBodyUrls = rawBodyUrls;
+      } else if (typeof rawBodyUrls === 'string') {
+        this.captureBodyUrls = rawBodyUrls.split(',').map((s) => s.trim()).filter(Boolean);
+      } else {
+        this.captureBodyUrls = [];
+      }
 
       this.buffer = new RingBuffer(this.maxEvents);
 
@@ -174,6 +221,31 @@
       }
       const script = document.querySelector('script[data-endpoint]');
       return script ? script.getAttribute('data-endpoint') : null;
+    }
+
+    extractScriptCaptureBodyUrls() {
+      let raw = null;
+      if (document.currentScript) {
+        raw = document.currentScript.getAttribute('data-capture-body-urls');
+      }
+      if (!raw) {
+        const script = document.querySelector('script[data-capture-body-urls]');
+        raw = script ? script.getAttribute('data-capture-body-urls') : null;
+      }
+      if (!raw) return [];
+      return raw.split(',').map((s) => s.trim()).filter(Boolean);
+    }
+
+    shouldCaptureBody(url) {
+      if (!this.captureBodyUrls || this.captureBodyUrls.length === 0 || !url) {
+        return false;
+      }
+      return this.captureBodyUrls.some((pattern) => {
+        if (pattern instanceof RegExp) {
+          return pattern.test(url);
+        }
+        return typeof pattern === 'string' && url.includes(pattern);
+      });
     }
 
     // -----------------------------------------------------------------------
@@ -232,18 +304,26 @@
           return originalFetch.apply(this, args);
         }
 
+        const shouldCapture = self.shouldCaptureBody(safeUrl);
+        let scrubbedReqBody = null;
+        if (shouldCapture && config && config.body) {
+          try {
+            scrubbedReqBody = scrubPayload(config.body);
+          } catch (e) {}
+        }
+
         try {
           const response = await originalFetch.apply(this, args);
           const duration = Date.now() - startTime;
 
-          // Record non-2xx responses or errors for route mocking
+          // Record non-2xx responses or allowlisted payloads for route mocking & debugging
           if (!response.ok) {
             let errorBody = null;
             try {
               // Clone to inspect body without consuming client stream
               const clone = response.clone();
               const text = await clone.text();
-              errorBody = JSON.parse(text);
+              errorBody = scrubPayload(text);
             } catch (e) {
               errorBody = { statusText: response.statusText };
             }
@@ -254,7 +334,27 @@
               url: safeUrl,
               status: response.status,
               durationMs: duration,
+              requestBody: scrubbedReqBody,
               responseBody: errorBody,
+            });
+          } else if (shouldCapture) {
+            let successBody = null;
+            try {
+              const clone = response.clone();
+              const text = await clone.text();
+              successBody = scrubPayload(text);
+            } catch (e) {
+              successBody = { statusText: response.statusText };
+            }
+
+            self.buffer.push({
+              type: 'network',
+              method,
+              url: safeUrl,
+              status: response.status,
+              durationMs: duration,
+              requestBody: scrubbedReqBody,
+              responseBody: successBody,
             });
           }
 
@@ -267,6 +367,7 @@
             url: safeUrl,
             status: 0,
             durationMs: duration,
+            requestBody: scrubbedReqBody,
             responseBody: { error: networkError.message || 'Network request failed' },
           });
           throw networkError;
@@ -474,8 +575,8 @@
     if (key) instance.init({ apiKey: key });
   }
 
-  // Export RingBuffer for testing
+  // Export RingBuffer and security helpers for testing
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { BugReplayClient, RingBuffer, scrubText, scrubUrl, isSensitiveElement };
+    module.exports = { BugReplayClient, RingBuffer, scrubText, scrubUrl, isSensitiveElement, scrubPayload };
   }
 })(typeof window !== 'undefined' ? window : globalThis, typeof document !== 'undefined' ? document : {});

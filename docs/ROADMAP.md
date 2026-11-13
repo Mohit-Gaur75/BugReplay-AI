@@ -22,12 +22,13 @@ The current implementation encompasses:
 - [x] **Slack & Discord Webhook Alerts:** Real-time notifications when a new production incident is captured, complete with AI root cause summary and 1-click Playwright test copy.
 - [x] **GitHub Issues 1-Click Export:** Automatically generates formatted Markdown issue reports containing the error stack, AI diagnosis, suggested fix, and reproduction tests with direct link to GitHub.
 - [x] **Multi-Framework Test Export (Cypress & Puppeteer):** Interactive framework switcher tab in dashboard allowing instant conversion and download of tests as Playwright (`.spec.js`), Cypress (`.cy.js`), or Puppeteer (`.js`).
-- [ ] **Enhanced Network Payload Capture:** Configurable allowlist for non-sensitive request/response bodies to improve route mocking fidelity for complex GraphQL schemas.
+- [x] **Enhanced Network Payload Capture:** Configurable allowlist (`data-capture-body-urls` / `captureBodyUrls`) for request/response bodies with automated PII & credit-card redaction, improving route mocking fidelity for complex GraphQL and REST APIs.
 
-### v1.2 — Multi-Framework Test Synthesis (Q2 2027)
-- **Cypress & Puppeteer Export:** Support toggling test output between `@playwright/test`, `cypress`, and `puppeteer`.
-- **Component Test Synthesis:** Generate React Testing Library (`@testing-library/react`) unit tests directly from captured frontend component state failures.
-- **Automated Fix PR Generator:** Leverage Gemini to automatically generate a GitHub Pull Request with the proposed code fix diff.
+### v1.2 — Developer Tools & Synthesis Acceleration (Current)
+- [x] **1-Click cURL Reproduction:** Instant cURL command generator with captured headers, method, and allowlisted payload data.
+- [x] **Component Test Synthesis (React Testing Library):** Converts Playwright telemetry into `@testing-library/react` + `vitest` unit tests with mocked global `fetch`.
+- [x] **Unified Git Patch (`fix.patch`) Generator:** Exports a standardized Git patch with test reproduction suite ready for `git apply fix.patch`.
+- [ ] **Automated Fix PR Generator:** Direct GitHub Pull Request creation via GitHub REST API using repository PAT.
 
 ---
 

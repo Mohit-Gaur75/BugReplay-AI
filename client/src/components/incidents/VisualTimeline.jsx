@@ -10,6 +10,10 @@ export default function VisualTimeline({ telemetry = [], errorDetails = null }) 
     let curl = `curl -X ${method} '${url}'`;
     curl += ` \\\n  -H 'Content-Type: application/json'`;
     curl += ` \\\n  -H 'User-Agent: BugReplay-Debug-Client/1.0'`;
+    if (item.requestBody) {
+      const bodyStr = typeof item.requestBody === 'object' ? JSON.stringify(item.requestBody) : String(item.requestBody);
+      curl += ` \\\n  -d '${bodyStr.replace(/'/g, "\\'")}'`;
+    }
     return curl;
   };
 
@@ -116,10 +120,25 @@ export default function VisualTimeline({ telemetry = [], errorDetails = null }) 
                       )}
                     </button>
                   </div>
+                  {item.requestBody && (
+                    <div className="mt-2">
+                      <div className="text-[10px] font-mono text-zinc-500 font-semibold uppercase">Request Payload:</div>
+                      <pre className="mt-1 text-[11px] font-mono bg-background p-2 rounded border border-border text-zinc-300 overflow-x-auto">
+                        {typeof item.requestBody === 'object' ? JSON.stringify(item.requestBody, null, 2) : String(item.requestBody)}
+                      </pre>
+                    </div>
+                  )}
                   {item.responseBody && (
-                    <pre className="mt-2 text-[11px] font-mono bg-background p-2 rounded border border-border text-red-300 overflow-x-auto">
-                      {JSON.stringify(item.responseBody, null, 2)}
-                    </pre>
+                    <div className="mt-2">
+                      <div className="text-[10px] font-mono text-zinc-500 font-semibold uppercase">
+                        {(item.status >= 400 || item.status === 0) ? 'Error Response Body:' : 'Response Body:'}
+                      </div>
+                      <pre className={`mt-1 text-[11px] font-mono bg-background p-2 rounded border border-border overflow-x-auto ${
+                        (item.status >= 400 || item.status === 0) ? 'text-red-300' : 'text-emerald-300'
+                      }`}>
+                        {typeof item.responseBody === 'object' ? JSON.stringify(item.responseBody, null, 2) : String(item.responseBody)}
+                      </pre>
+                    </div>
                   )}
                 </div>
               )}

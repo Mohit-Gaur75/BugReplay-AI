@@ -12,7 +12,9 @@ const sdkPath = path.resolve(__dirname, '../src/bugreplay.js');
 const sdkCode = fs.readFileSync(sdkPath, 'utf8');
 
 // Mock browser globals
-const mockWindow = {};
+const mockWindow = {
+  addEventListener: () => {},
+};
 const mockDocument = {
   currentScript: null,
   addEventListener: () => {},
@@ -24,7 +26,7 @@ const mockModule = { exports: {} };
 const evaluateSdk = new Function('window', 'document', 'module', sdkCode);
 evaluateSdk(mockWindow, mockDocument, mockModule);
 
-const { RingBuffer, scrubText, scrubUrl, isSensitiveElement } = mockModule.exports;
+const { RingBuffer, scrubText, scrubUrl, isSensitiveElement, scrubPayload, BugReplayClient } = mockModule.exports;
 
 describe('Phase 3: Client Capture SDK Subsystems', () => {
   describe('Rolling Ring Buffer', () => {
@@ -99,6 +101,40 @@ describe('Phase 3: Client Capture SDK Subsystems', () => {
         hasAttribute: () => false,
       };
       assert.equal(isSensitiveElement(mockStandardBtn), false);
+    });
+
+    test('scrubPayload redacts sensitive keys and credit cards in objects and JSON strings', () => {
+      const payload = {
+        operationName: 'CheckoutMutation',
+        variables: {
+          cartId: 'cart_9912',
+          password: 'superSecret123',
+          apiKey: 'key_live_xyz',
+          notes: 'Customer card: 4111 2222 3333 4444 on file',
+        },
+      };
+
+      const clean = scrubPayload(payload);
+      assert.equal(clean.operationName, 'CheckoutMutation');
+      assert.equal(clean.variables.cartId, 'cart_9912');
+      assert.equal(clean.variables.password, '[REDACTED_PII]');
+      assert.equal(clean.variables.apiKey, '[REDACTED_PII]');
+      assert.ok(!JSON.stringify(clean).includes('superSecret123'));
+      assert.ok(!JSON.stringify(clean).includes('4111'));
+      assert.ok(clean.variables.notes.includes('••••-••••-••••-••••'));
+    });
+
+    test('shouldCaptureBody matches allowlisted endpoints correctly', () => {
+      const client = new BugReplayClient();
+      client.init({
+        captureBodyUrls: ['/api/v1/graphql', '/api/v1/cart', /\/checkout\/\d+/],
+      });
+
+      assert.equal(client.shouldCaptureBody('/api/v1/graphql'), true);
+      assert.equal(client.shouldCaptureBody('/api/v1/cart/items'), true);
+      assert.equal(client.shouldCaptureBody('/checkout/12345'), true);
+      assert.equal(client.shouldCaptureBody('/api/v1/analytics'), false);
+      assert.equal(client.shouldCaptureBody('/static/bundle.js'), false);
     });
   });
 });

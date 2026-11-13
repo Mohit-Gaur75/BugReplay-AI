@@ -62,7 +62,17 @@ export class Synthesizer {
 
       const mockBody = net.responseBody ? JSON.stringify(net.responseBody) : JSON.stringify({ error: 'Simulated API Failure' });
 
-      return `  // Mock failed ${net.method || 'POST'} endpoint
+      let payloadComment = '';
+      if (net.requestBody) {
+        if (typeof net.requestBody === 'object' && net.requestBody.query) {
+          const opName = net.requestBody.operationName ? ` (${net.requestBody.operationName})` : '';
+          payloadComment = `\n  // Matched GraphQL query${opName}: ${JSON.stringify(net.requestBody).slice(0, 100)}...`;
+        } else {
+          payloadComment = `\n  // Request payload: ${JSON.stringify(net.requestBody).slice(0, 80)}`;
+        }
+      }
+
+      return `  // Mock failed ${net.method || 'POST'} endpoint${payloadComment}
   await page.route('${routePattern}', async (route) => {
     await route.fulfill({
       status: ${net.status || 500},
@@ -109,7 +119,14 @@ ${actionSteps.length > 0 ? actionSteps.join('\n\n') + '\n\n' : ''}    // 3. Asse
     if (networkFailures.length > 0) {
       const firstFail = networkFailures[0];
       rootCause = `Unhandled ${firstFail.status || 500} response from ${firstFail.method || 'POST'} ${firstFail.url}.`;
-      explanation = `The user clicked through the interface and triggered a call to ${firstFail.url}, which failed with HTTP ${firstFail.status}. The client code failed to catch this network failure or assumed a successful JSON schema payload.`;
+      let payloadNote = '';
+      if (firstFail.requestBody && typeof firstFail.requestBody === 'object') {
+        const keys = Object.keys(firstFail.requestBody);
+        if (keys.length > 0) {
+          payloadNote = ` The request sent payload fields [${keys.slice(0, 5).join(', ')}].`;
+        }
+      }
+      explanation = `The user clicked through the interface and triggered a call to ${firstFail.url}, which failed with HTTP ${firstFail.status}.${payloadNote} The client code failed to catch this network failure or assumed a successful JSON schema payload.`;
       suggestedFix = `Add a try/catch block or check response.ok in the network handler for ${firstFail.url}. Ensure fallback state is displayed instead of throwing an unhandled exception.`;
     }
 
