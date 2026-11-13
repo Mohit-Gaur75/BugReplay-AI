@@ -8,6 +8,7 @@ import { env } from './config/env.js';
 import { getDb } from './db/db.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { errorResponse } from './utils/response.js';
+import apiRouter from './routes/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -53,6 +54,9 @@ export function createApp() {
   // Static assets (SDK delivery, demo files)
   const publicDir = path.resolve(__dirname, '../public');
   app.use(express.static(publicDir));
+
+  // Mount API v1 Routes
+  app.use('/api/v1', apiRouter);
 
   // Health Check Endpoint
   app.get('/health', (req, res) => {
