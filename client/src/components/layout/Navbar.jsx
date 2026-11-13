@@ -1,6 +1,6 @@
 import React from 'react';
 import { useAuth } from '../../context/AuthContext.jsx';
-import { Bug, Activity, Terminal, FolderKanban, CreditCard, LogOut, PlayCircle, ExternalLink } from 'lucide-react';
+import { Bug, Activity, Terminal, FolderKanban, CreditCard, LogOut, PlayCircle, Settings as SettingsIcon } from 'lucide-react';
 
 export default function Navbar({ activeTab, onTabChange }) {
   const { user, logout } = useAuth();
@@ -10,6 +10,7 @@ export default function Navbar({ activeTab, onTabChange }) {
     { id: 'projects', label: 'Projects & Keys', icon: FolderKanban },
     { id: 'demo', label: 'Live Sandbox', icon: PlayCircle },
     { id: 'billing', label: 'Billing & Quotas', icon: CreditCard },
+    { id: 'settings', label: 'Settings', icon: SettingsIcon },
   ];
 
   return (

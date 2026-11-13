@@ -9,6 +9,7 @@ import IncidentDetails from './pages/IncidentDetails.jsx';
 import Projects from './pages/Projects.jsx';
 import Billing from './pages/Billing.jsx';
 import Demo from './pages/Demo.jsx';
+import Settings from './pages/Settings.jsx';
 
 function MainApp() {
   const { user, isAuthenticated, loading } = useAuth();
@@ -105,6 +106,10 @@ function MainApp() {
         {activeTab === 'projects' && <Projects />}
 
         {activeTab === 'billing' && <Billing />}
+
+        {activeTab === 'settings' && (
+          <Settings onGoToBilling={() => setActiveTab('billing')} />
+        )}
 
         {activeTab === 'demo' && (
           <Demo

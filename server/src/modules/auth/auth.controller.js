@@ -38,4 +38,29 @@ export class AuthController {
       next(err);
     }
   }
+
+  static async changePassword(req, res, next) {
+    try {
+      const { currentPassword, newPassword } = req.body;
+      if (!currentPassword || !newPassword || newPassword.length < 8) {
+        return res.status(400).json({
+          success: false,
+          error: { message: 'New password must be at least 8 characters long.' },
+        });
+      }
+      await AuthService.changePassword(req.user.id, currentPassword, newPassword);
+      return successResponse(res, null, 'Password updated successfully', 200);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static auditLogs(req, res, next) {
+    try {
+      const logs = AuthService.getAuditLogs(req.user.id);
+      return successResponse(res, { audit_logs: logs }, 'Audit logs retrieved', 200);
+    } catch (err) {
+      next(err);
+    }
+  }
 }

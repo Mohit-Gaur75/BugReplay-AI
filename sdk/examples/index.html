@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BugReplay AI — SDK Integration Example</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #09090b;
+      color: #f4f4f5;
+      max-width: 680px;
+      margin: 40px auto;
+      padding: 0 20px;
+      line-height: 1.6;
+    }
+    .card {
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+    button {
+      background: #2563eb;
+      color: white;
+      border: none;
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-weight: 500;
+      cursor: pointer;
+      margin-right: 10px;
+      margin-top: 10px;
+    }
+    button.danger {
+      background: #dc2626;
+    }
+    button.secondary {
+      background: #27272a;
+      border: 1px solid #3f3f46;
+    }
+    input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 8px 12px;
+      background: #09090b;
+      border: 1px solid #3f3f46;
+      border-radius: 6px;
+      color: white;
+      margin-top: 6px;
+      margin-bottom: 14px;
+    }
+    code {
+      font-family: monospace;
+      color: #93c5fd;
+      background: #1e1e24;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+  </style>
+
+  <!-- Embed BugReplay Capture SDK -->
+  <script 
+    src="http://localhost:5000/bugreplay.js" 
+    data-api-key="br_live_demo_1234567890abcdef1234567890abcdef"
+    data-endpoint="http://localhost:5000/api/v1/ingest"
+    defer>
+  </script>
+</head>
+<body>
+  <h1>BugReplay SDK Integration Example</h1>
+  <p>
+    This page demonstrates the <code>bugreplay.js</code> zero-dependency SDK. 
+    User clicks, failed network calls, and unhandled errors are automatically captured.
+  </p>
+
+  <div class="card">
+    <h3>1. Sensitive Form (Automatic PII Masking)</h3>
+    <form id="checkout-form" onsubmit="event.preventDefault();">
+      <label>Email Address</label>
+      <input type="email" value="customer@example.com" />
+
+      <label>Password (Auto-Masked in Telemetry)</label>
+      <input type="password" value="SuperSecretPassword123" />
+
+      <label>Credit Card Number (Auto-Masked in Telemetry)</label>
+      <input type="text" name="card_number" value="4111 2222 3333 4444" />
+
+      <button type="submit" id="save-card-btn">Save Information</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h3>2. Simulated Error Triggers</h3>
+    <p style="font-size: 13px; color: #a1a1aa;">
+      Click the buttons below to trigger controlled exceptions:
+    </p>
+
+    <button class="danger" id="btn-trigger-crash" onclick="triggerCrash()">
+      Trigger Unhandled TypeError
+    </button>
+
+    <button class="secondary" id="btn-report-modal" onclick="window.BugReplay.showReportWidget()">
+      Open "Report Issue" Widget
+    </button>
+  </div>
+
+  <script>
+    function triggerCrash() {
+      // Simulate client-side null state exception
+      const user = null;
+      console.log('Attempting to read user orders...');
+      user.orders.forEach(order => console.log(order));
+    }
+  </script>
+</body>
+</html>
