@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
-import { Bug, Eye, EyeOff, Loader2, ArrowRight } from 'lucide-react';
+import { Bug, Eye, EyeOff, Loader2, ArrowRight, Sparkles } from 'lucide-react';
 
 export default function Login({ onSwitchToRegister, onLoggedIn }) {
   const { login } = useAuth();
@@ -84,6 +84,18 @@ export default function Login({ onSwitchToRegister, onLoggedIn }) {
             className="w-full mt-2 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg text-xs font-semibold flex items-center justify-center space-x-2 transition-all shadow"
           >
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>Sign In</span>}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setEmail('demo@bugreplay.dev');
+              setPassword('password123');
+            }}
+            className="w-full py-2 bg-surface-elevated hover:bg-zinc-800 text-zinc-300 hover:text-white rounded-lg text-xs font-medium border border-border flex items-center justify-center space-x-2 transition-all"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+            <span>Fill Demo Credentials (demo@bugreplay.dev)</span>
           </button>
         </form>
 

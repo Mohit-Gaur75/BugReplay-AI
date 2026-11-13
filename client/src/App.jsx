@@ -12,7 +12,7 @@ import Demo from './pages/Demo.jsx';
 import Settings from './pages/Settings.jsx';
 
 function MainApp() {
-  const { user, isAuthenticated, loading } = useAuth();
+  const { user, isAuthenticated, loading, login } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [authView, setAuthView] = useState('landing'); // 'landing' | 'login' | 'register'
   const [selectedIncidentId, setSelectedIncidentId] = useState(null);
@@ -60,9 +60,13 @@ function MainApp() {
     return (
       <Landing
         onStartFree={() => setAuthView('register')}
-        onTryDemo={() => {
-          setAuthView('login');
-          // Alternatively could allow demo sandbox directly
+        onTryDemo={async () => {
+          try {
+            await login('demo@bugreplay.dev', 'password123');
+            setActiveTab('demo');
+          } catch (e) {
+            setAuthView('login');
+          }
         }}
         onLogin={() => setAuthView('login')}
       />
