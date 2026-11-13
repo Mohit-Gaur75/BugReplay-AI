@@ -113,3 +113,30 @@ sqlite3 server/data/bugreplay.db "VACUUM INTO 'server/data/backups/backup-$(date
 
 - **Health Endpoint:** `GET /health` returns HTTP 200 with uptime and database connection status.
 - **Graceful Shutdown:** The server listens for `SIGTERM` and `SIGINT`, closes HTTP listeners, stops the background job worker, and flushes SQLite WAL buffers to disk via `db.close()`.
+
+---
+
+## 6. CI/CD Automation & GitHub Actions
+
+BugReplay AI includes production-grade GitHub Actions workflows for continuous integration and automated container release.
+
+### 6.1. Continuous Integration (`.github/workflows/ci.yml`)
+Runs automatically on every pull request and push to `main` and `develop`:
+- **Multi-Version Matrix Testing:** Tests across Node.js `18.x`, `20.x`, and `22.x` on `ubuntu-latest`.
+- **SDK Compilation:** Compiles canonical browser SDK to ensure zero build errors.
+- **Automated Test Suites:** Runs all 44 server, SDK, and CLI unit/integration tests (`npm run test:all`).
+- **Database Migrations & Seeding:** Validates that SQLite WAL migrations apply cleanly from scratch.
+- **Client Build:** Verifies the React 19 + Vite 6 production bundle builds without errors or missing imports.
+- **Docker Smoke Check:** Runs a container build verification using Docker Buildx and GitHub Actions cache.
+
+### 6.2. Continuous Delivery & Container Release (`.github/workflows/cd.yml`)
+Triggers automatically on semantic version tags (e.g. `v1.0.0`, `v1.1.0`) or via manual dispatch:
+- **Builds & Publishes Docker Images:** Pushes multi-platform images to GitHub Container Registry (`ghcr.io/<org>/bugreplay-ai:latest` and `:vX.Y.Z`).
+- **Packages Standalone Artifacts:** Bundles `bugreplay.js` standalone SDK and compiled client distribution.
+- **Creates GitHub Release:** Automatically drafts and publishes release notes with attached binary and distribution archives.
+
+### 6.3. Secret Configuration for Production Deployments
+In your repository's **Settings > Secrets and variables > Actions**, configure:
+- `JWT_SECRET`: Random 64-character hex string for signing session tokens in production.
+- `GEMINI_API_KEY`: (Optional) Google Gemini API key for AI synthesis.
+- `GITHUB_TOKEN`: Built-in GitHub Actions token (pre-configured with `packages: write` permissions).
