@@ -1,76 +1,126 @@
 import React, { useState, useEffect } from 'react';
-import { Activity, ShieldCheck, Terminal, Cpu } from 'lucide-react';
+import { AuthProvider, useAuth } from './context/AuthContext.jsx';
+import Navbar from './components/layout/Navbar.jsx';
+import Landing from './pages/Landing.jsx';
+import Login from './pages/Login.jsx';
+import Register from './pages/Register.jsx';
+import Dashboard from './pages/Dashboard.jsx';
+import IncidentDetails from './pages/IncidentDetails.jsx';
+import Projects from './pages/Projects.jsx';
+import Billing from './pages/Billing.jsx';
+import Demo from './pages/Demo.jsx';
 
-export default function App() {
-  const [health, setHealth] = useState(null);
-  const [loading, setLoading] = useState(true);
+function MainApp() {
+  const { user, isAuthenticated, loading } = useAuth();
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [authView, setAuthView] = useState('landing'); // 'landing' | 'login' | 'register'
+  const [selectedIncidentId, setSelectedIncidentId] = useState(null);
 
+  // Dynamically load the BugReplay SDK script
   useEffect(() => {
-    fetch('/health')
-      .then((res) => res.json())
-      .then((data) => {
-        setHealth(data);
-        setLoading(false);
-      })
-      .catch((err) => {
-        setHealth({ status: 'error', error: err.message });
-        setLoading(false);
-      });
+    if (!document.getElementById('bugreplay-sdk-script')) {
+      const script = document.createElement('script');
+      script.id = 'bugreplay-sdk-script';
+      script.src = '/bugreplay.js';
+      script.defer = true;
+      document.head.appendChild(script);
+    }
   }, []);
 
-  return (
-    <div className="min-h-screen bg-background text-zinc-100 flex flex-col justify-center items-center p-6">
-      <div className="max-w-xl w-full bg-surface border border-border rounded-xl p-8 shadow-2xl">
-        <div className="flex items-center space-x-3 mb-6">
-          <div className="w-10 h-10 rounded-lg bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
-            <Activity className="w-5 h-5 animate-pulse" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold tracking-tight text-white">BugReplay AI</h1>
-            <p className="text-xs text-zinc-400">Production Bug Replay & Playwright Test Generator</p>
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          <div className="p-4 rounded-lg bg-surface-elevated border border-border-subtle flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <Cpu className="w-4 h-4 text-emerald-400" />
-              <span className="text-sm font-medium">Backend Health Check</span>
-            </div>
-            <div>
-              {loading ? (
-                <span className="text-xs text-zinc-500">Checking...</span>
-              ) : health?.status === 'healthy' ? (
-                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                  HEALTHY
-                </span>
-              ) : (
-                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-red-500/10 text-red-400 border border-red-500/20">
-                  OFFLINE
-                </span>
-              )}
-            </div>
-          </div>
-
-          <div className="p-4 rounded-lg bg-surface-elevated border border-border-subtle">
-            <div className="flex items-center space-x-2 text-xs font-mono text-zinc-400 mb-2">
-              <Terminal className="w-3.5 h-3.5 text-blue-400" />
-              <span>Diagnostic Payload</span>
-            </div>
-            <pre className="text-xs font-mono bg-background p-3 rounded border border-border text-zinc-300 overflow-x-auto">
-              {JSON.stringify(health || { status: 'loading' }, null, 2)}
-            </pre>
-          </div>
-        </div>
-
-        <div className="mt-6 pt-4 border-t border-border flex items-center justify-between text-xs text-zinc-500">
-          <div className="flex items-center space-x-1.5">
-            <ShieldCheck className="w-3.5 h-3.5 text-blue-400" />
-            <span>Phase 1: Project Foundation Ready</span>
-          </div>
-          <span>ES Modules + SQLite WAL</span>
-        </div>
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center text-xs text-zinc-500">
+        Initializing BugReplay AI session...
       </div>
+    );
+  }
+
+  // Unauthenticated Flow
+  if (!isAuthenticated) {
+    if (authView === 'login') {
+      return (
+        <Login
+          onSwitchToRegister={() => setAuthView('register')}
+          onLoggedIn={() => setActiveTab('dashboard')}
+        />
+      );
+    }
+
+    if (authView === 'register') {
+      return (
+        <Register
+          onSwitchToLogin={() => setAuthView('login')}
+          onRegistered={() => setActiveTab('dashboard')}
+        />
+      );
+    }
+
+    // Default: Marketing Landing Page
+    return (
+      <Landing
+        onStartFree={() => setAuthView('register')}
+        onTryDemo={() => {
+          setAuthView('login');
+          // Alternatively could allow demo sandbox directly
+        }}
+        onLogin={() => setAuthView('login')}
+      />
+    );
+  }
+
+  // Authenticated App Flow
+  const handleSelectIncident = (id) => {
+    setSelectedIncidentId(id);
+    setActiveTab('incident-details');
+  };
+
+  const handleBackToDashboard = () => {
+    setSelectedIncidentId(null);
+    setActiveTab('dashboard');
+  };
+
+  return (
+    <div className="min-h-screen bg-background text-zinc-100 flex flex-col">
+      <Navbar activeTab={activeTab} onTabChange={(tab) => {
+        setSelectedIncidentId(null);
+        setActiveTab(tab);
+      }} />
+
+      <main className="flex-1">
+        {activeTab === 'dashboard' && (
+          <Dashboard
+            onSelectIncident={handleSelectIncident}
+            onGoToDemo={() => setActiveTab('demo')}
+            onGoToProjects={() => setActiveTab('projects')}
+          />
+        )}
+
+        {activeTab === 'incident-details' && selectedIncidentId && (
+          <IncidentDetails
+            incidentId={selectedIncidentId}
+            onBack={handleBackToDashboard}
+          />
+        )}
+
+        {activeTab === 'projects' && <Projects />}
+
+        {activeTab === 'billing' && <Billing />}
+
+        {activeTab === 'demo' && (
+          <Demo
+            onOpenIncident={handleSelectIncident}
+            onGoToDashboard={handleBackToDashboard}
+          />
+        )}
+      </main>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <MainApp />
+    </AuthProvider>
   );
 }

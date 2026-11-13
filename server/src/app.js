@@ -58,6 +58,23 @@ export function createApp() {
   // Mount API v1 Routes
   app.use('/api/v1', apiRouter);
 
+  // Simulation Endpoints for Sandbox Demo
+  app.post('/api/v1/simulate/checkout-timeout', (req, res) => {
+    return res.status(504).json({
+      error: 'PaymentGatewayTimeout',
+      code: 'GATEWAY_TIMEOUT_504',
+      message: 'Payment processor timed out after 3000ms during charge execution',
+    });
+  });
+
+  app.post('/api/v1/simulate/server-error', (req, res) => {
+    return res.status(500).json({
+      error: 'InternalServerError',
+      code: 'DB_LOCK_TIMEOUT',
+      message: 'Database query execution failed: lock wait timeout exceeded',
+    });
+  });
+
   // Health Check Endpoint
   app.get('/health', (req, res) => {
     try {
