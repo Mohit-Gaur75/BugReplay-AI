@@ -2,6 +2,7 @@ import { createApp } from './app.js';
 import { env } from './config/env.js';
 import { initDb, closeDb } from './db/db.js';
 import { runMigrations } from './db/migrations.js';
+import { startWorker, stopWorker } from './jobs/worker.js';
 
 async function bootstrap() {
   try {
@@ -15,7 +16,10 @@ async function bootstrap() {
     runMigrations();
     console.log('✓ Migrations verified and up to date.');
 
-    // 3. Create Express App & Start Server
+    // 3. Start Durable Background Job Worker
+    startWorker(2000);
+
+    // 4. Create Express App & Start Server
     const app = createApp();
     const server = app.listen(env.PORT, () => {
       console.log(`\n=================================================`);
@@ -28,6 +32,7 @@ async function bootstrap() {
     // Graceful Shutdown Handler
     const shutdown = (signal) => {
       console.log(`\nReceived ${signal}. Shutting down gracefully...`);
+      stopWorker();
       server.close(() => {
         console.log('HTTP server closed.');
         closeDb();
