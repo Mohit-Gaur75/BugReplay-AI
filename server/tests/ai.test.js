@@ -6,6 +6,7 @@ import { initDb, closeDb } from '../src/db/db.js';
 import { runMigrations } from '../src/db/migrations.js';
 import { Synthesizer } from '../src/modules/ai/synthesizer.js';
 import { processJobsOnce } from '../src/jobs/worker.js';
+import { convertToCypress, convertToPuppeteer } from '../../client/src/utils/frameworkConverter.js';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -147,5 +148,42 @@ describe('Phase 5: AI & Playwright Synthesis Engine + Durable Queue Worker', () 
     assert.ok(completedIncident.generated_playwright_test.includes('Database locked'));
     assert.ok(completedIncident.ai_root_cause_summary);
     assert.ok(completedIncident.suggested_fix);
+  });
+
+  test('Framework Converter exports Playwright code to clean Cypress and Puppeteer tests', () => {
+    const playwrightCode = `
+import { test, expect } from '@playwright/test';
+
+test('reproduce production failure', async ({ page }) => {
+  await page.route('http://localhost:5173/api/v1/charge', async route => {
+    await route.fulfill({
+      status: 500,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: 'Gateway timeout' }),
+    });
+  });
+
+  await page.goto('http://localhost:5173/checkout');
+  await page.click('button#checkout-btn');
+});
+    `;
+
+    const mockIncident = {
+      id: 'abc-12345678-def',
+      error_message: 'Payment Gateway Timeout',
+      page_url: 'http://localhost:5173/checkout',
+    };
+
+    const cypressCode = convertToCypress(playwrightCode, mockIncident);
+    assert.ok(cypressCode.includes("describe('BugReplay Incident #abc-1234 Reproduction'"));
+    assert.ok(cypressCode.includes("cy.intercept('*/api/v1/charge', {"));
+    assert.ok(cypressCode.includes("statusCode: 500"));
+    assert.ok(cypressCode.includes("cy.visit('http://localhost:5173/checkout');"));
+    assert.ok(cypressCode.includes("cy.get('button#checkout-btn').click();"));
+
+    const puppeteerCode = convertToPuppeteer(playwrightCode, mockIncident);
+    assert.ok(puppeteerCode.includes("import puppeteer from 'puppeteer'"));
+    assert.ok(puppeteerCode.includes("await page.goto('http://localhost:5173/checkout'"));
+    assert.ok(puppeteerCode.includes("await page.click('button#checkout-btn');"));
   });
 });
