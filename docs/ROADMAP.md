@@ -68,12 +68,19 @@ The current implementation encompasses:
 - [x] **Enterprise Audit Console UI:** Sleek modal on Projects dashboard with real-time event feed, colored action badges, actor role tags, IP network details, expandable syntax-highlighted JSON diff inspector, and 1-click CSV/JSON export.
 - [x] **100-Test Monorepo Milestone:** 11 dedicated audit log integration tests in `server/tests/audit.test.js`.
 
-### v1.8 — Device & Network Health Telemetry & Micro-Pills (Current Release)
+### v1.8 — Device & Network Health Telemetry & Micro-Pills (Released)
 - [x] **Client Environmental Health Monitor (`bugreplay.js`):** In-browser telemetry collection inspecting `navigator.connection` (effectiveType `4G`/`3G`/`2G`/`offline`, downlink Mbps, RTT latency, saveData mode), battery API (`getBattery` charging state and percentage), hardware specs (`deviceMemory` RAM, `hardwareConcurrency` CPU cores), and display metrics (DPR Retina scale, orientation, color scheme, reduced motion).
 - [x] **Schema Upgrade & Durable Ingestion (`008_device_network_health`):** Adds `device_health_json` to `incidents` schema, persisting environmental telemetry on first capture and refreshing snapshots during incident recurrence deduplication.
 - [x] **Incident Detail Health Pills Ribbon:** High-visibility contextual cards on `IncidentDetails.jsx` showcasing real-time network latency, power state, hardware specs, and display preferences.
 - [x] **Dashboard Micro-Badges:** Inline telemetry micro-pills in `Dashboard.jsx` table rows displaying connection speed (`4G`, `OFFLINE`), charging state (`⚡`), and device form factor (`Desktop`/`Mobile`).
 - [x] **102 Automated Tests Across Monorepo:** 100% test pass rate across all 5 workspace modules.
+
+### v1.9 — Breadcrumb Category Filtering, Real-Time Search & Relative Deltas (Current Release)
+- [x] **Category Filter Navigation Bar:** Interactive quick-filter pill bar with dynamic counter badges (`All`, `Clicks`, `Network`, `Console`, `Nav`, `Reports`) filtering telemetry items instantly.
+- [x] **Real-Time Timeline Keyword Search:** Search input field filtering across tags, DOM selectors, target elements, URLs, HTTP status codes, method types, and JSON request/response payloads.
+- [x] **Relative Elapsed Time Deltas (`+Δt`):** Visual latency badges displaying elapsed duration between consecutive breadcrumb events (`+12ms`, `+1.4s`) to isolate hangs and idle times.
+- [x] **Collapsible Request & Response Payload Inspector:** Expandable JSON payloads for network requests with 1-click cURL copying and syntax-styled preview.
+- [x] **Interactive Filter Reset & Empty State:** Graceful zero-match UI with one-click filter reset action restoring timeline view.
 
 ---
 
