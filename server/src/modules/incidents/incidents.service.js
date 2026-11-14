@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { getDb } from '../../db/db.js';
+import { TestRunnerService } from '../../services/testRunner.service.js';
 
 export class IncidentsService {
   static listIncidents(userId, { projectId, status, search, page = 1, limit = 20 }) {
@@ -53,6 +54,9 @@ export class IncidentsService {
         i.occurrence_count,
         i.last_seen_at,
         i.fingerprint,
+        i.test_status,
+        i.test_last_run_at,
+        i.test_duration_ms,
         i.created_at
       FROM incidents i
       JOIN projects p ON p.id = i.project_id
@@ -361,5 +365,29 @@ npx playwright test ${testPath} --headed
       error.isOperational = true;
       throw error;
     }
+  }
+
+  static async runTest(userId, incidentId, options = {}) {
+    const incident = this.getIncidentById(userId, incidentId);
+
+    if (!incident.generated_playwright_test) {
+      const error = new Error('No synthesized Playwright test exists for this incident yet.');
+      error.statusCode = 400;
+      error.code = 'NO_SYNTHESIZED_TEST';
+      error.isOperational = true;
+      throw error;
+    }
+
+    return await TestRunnerService.executeTest(incidentId, options);
+  }
+
+  static getTestRuns(userId, incidentId) {
+    this.getIncidentById(userId, incidentId);
+    return TestRunnerService.getTestRuns(incidentId);
+  }
+
+  static getLatestTestRun(userId, incidentId) {
+    this.getIncidentById(userId, incidentId);
+    return TestRunnerService.getLatestTestRun(incidentId);
   }
 }

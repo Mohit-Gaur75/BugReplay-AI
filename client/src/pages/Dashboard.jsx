@@ -90,6 +90,10 @@ export default function Dashboard({ onSelectIncident, onGoToDemo, onGoToProjects
       eventSource.addEventListener('synthesis.completed', () => {
         fetchIncidents();
       });
+
+      eventSource.addEventListener('test_run.completed', () => {
+        fetchIncidents();
+      });
     } catch (e) {
       console.warn('Could not establish real-time SSE stream:', e);
     }
@@ -117,6 +121,41 @@ export default function Dashboard({ onSelectIncident, onGoToDemo, onGoToProjects
         return <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">RESOLVED</span>;
       default:
         return <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-700 text-zinc-300">IGNORED</span>;
+    }
+  };
+
+  const getVerificationBadge = (testStatus) => {
+    switch (testStatus) {
+      case 'REPRODUCED':
+        return (
+          <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            <CheckCircle2 className="w-3 h-3" />
+            <span>Reproduced</span>
+          </span>
+        );
+      case 'PASSED':
+        return (
+          <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">
+            <CheckCircle2 className="w-3 h-3" />
+            <span>Passed</span>
+          </span>
+        );
+      case 'RUNNING':
+        return (
+          <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse">
+            <span>Running...</span>
+          </span>
+        );
+      case 'FAILED':
+      case 'ERROR':
+        return (
+          <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-red-500/10 text-red-400 border border-red-500/20">
+            <AlertCircle className="w-3 h-3" />
+            <span>Error</span>
+          </span>
+        );
+      default:
+        return <span className="text-[10px] font-mono text-zinc-500">Untested</span>;
     }
   };
 
@@ -252,6 +291,7 @@ export default function Dashboard({ onSelectIncident, onGoToDemo, onGoToProjects
                   <th className="py-3 px-4">Error Message & Page</th>
                   <th className="py-3 px-4">Project</th>
                   <th className="py-3 px-4">AI Test</th>
+                  <th className="py-3 px-4">Verification</th>
                   <th className="py-3 px-4">Captured</th>
                   <th className="py-3 px-4 text-right">Action</th>
                 </tr>
@@ -301,6 +341,10 @@ export default function Dashboard({ onSelectIncident, onGoToDemo, onGoToProjects
                       ) : (
                         <span className="text-[11px] font-mono text-zinc-500">Pending</span>
                       )}
+                    </td>
+
+                    <td className="py-3 px-4 whitespace-nowrap">
+                      {getVerificationBadge(incident.test_status)}
                     </td>
 
                     <td className="py-3 px-4 whitespace-nowrap text-[11px] font-mono text-zinc-500">

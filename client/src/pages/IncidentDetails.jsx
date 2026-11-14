@@ -22,7 +22,13 @@ import {
   Check,
   X,
   GitBranch,
-  Download
+  Download,
+  Play,
+  CheckCircle,
+  XCircle,
+  ChevronDown,
+  ChevronUp,
+  History
 } from 'lucide-react';
 
 export default function IncidentDetails({ incidentId, onBack }) {
@@ -31,6 +37,13 @@ export default function IncidentDetails({ incidentId, onBack }) {
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const [error, setError] = useState(null);
+
+  // Cloud Test Runner State
+  const [runningTest, setRunningTest] = useState(false);
+  const [testRuns, setTestRuns] = useState([]);
+  const [showLogs, setShowLogs] = useState(true);
+  const [showRunsHistory, setShowRunsHistory] = useState(false);
+  const [testError, setTestError] = useState(null);
 
   // GitHub Issue Modal State
   const [showGithubModal, setShowGithubModal] = useState(false);
@@ -60,8 +73,68 @@ export default function IncidentDetails({ incidentId, onBack }) {
     }
   };
 
+  const fetchTestRuns = async () => {
+    try {
+      const res = await api.get(`/incidents/${incidentId}/test-runs`);
+      setTestRuns(res.data?.testRuns || []);
+    } catch (e) {
+      // Non-blocking
+    }
+  };
+
+  const handleRunCloudTest = async () => {
+    setRunningTest(true);
+    setTestError(null);
+    setIncident((prev) => ({ ...prev, test_status: 'RUNNING' }));
+    setShowLogs(true);
+
+    try {
+      const res = await api.post(`/incidents/${incidentId}/run-test`, {});
+      const result = res.data;
+      setIncident((prev) => ({
+        ...prev,
+        test_status: result.status,
+        test_duration_ms: result.durationMs,
+        test_logs: result.logs,
+        test_last_run_at: new Date().toISOString(),
+      }));
+      fetchTestRuns();
+    } catch (err) {
+      setTestError(err.message || 'Failed to execute test in cloud runner');
+      setIncident((prev) => ({ ...prev, test_status: 'ERROR' }));
+    } finally {
+      setRunningTest(false);
+    }
+  };
+
   useEffect(() => {
     fetchIncident();
+    fetchTestRuns();
+  }, [incidentId]);
+
+  // Real-Time SSE Stream Integration for Test Execution
+  useEffect(() => {
+    const token = localStorage.getItem('bugreplay_token');
+    if (!token) return;
+
+    let eventSource = null;
+    try {
+      eventSource = new EventSource(`/api/v1/incidents/stream?token=${encodeURIComponent(token)}`);
+
+      eventSource.addEventListener('test_run.completed', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (data.incidentId === incidentId) {
+            fetchIncident();
+            fetchTestRuns();
+          }
+        } catch {}
+      });
+    } catch {}
+
+    return () => {
+      if (eventSource) eventSource.close();
+    };
   }, [incidentId]);
 
   const handleStatusChange = async (newStatus) => {
@@ -333,6 +406,164 @@ export default function IncidentDetails({ incidentId, onBack }) {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Cloud Playwright Verification & Test Runner Console */}
+      <div className="bg-surface border border-border rounded-xl p-6 space-y-4 shadow-xl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center space-x-3">
+            <div className="p-2.5 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20">
+              <Play className="w-5 h-5 fill-current" />
+            </div>
+            <div>
+              <div className="flex items-center space-x-2.5">
+                <h3 className="text-sm font-bold text-white">Playwright Cloud Verification Engine</h3>
+                {incident.test_status === 'REPRODUCED' && (
+                  <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded text-[11px] font-mono font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                    <CheckCircle className="w-3.5 h-3.5" />
+                    <span>✓ REPRODUCED BUG</span>
+                  </span>
+                )}
+                {incident.test_status === 'PASSED' && (
+                  <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded text-[11px] font-mono font-bold bg-blue-500/15 text-blue-300 border border-blue-500/30">
+                    <CheckCircle className="w-3.5 h-3.5" />
+                    <span>✓ ALL ASSERTIONS PASSED</span>
+                  </span>
+                )}
+                {incident.test_status === 'RUNNING' && (
+                  <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded text-[11px] font-mono font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30 animate-pulse">
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>EXECUTING IN CHROMIUM...</span>
+                  </span>
+                )}
+                {incident.test_status === 'ERROR' && (
+                  <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded text-[11px] font-mono font-bold bg-red-500/15 text-red-300 border border-red-500/30">
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                    <span>RUNNER ERROR</span>
+                  </span>
+                )}
+                {(!incident.test_status || incident.test_status === 'UNTESTED') && (
+                  <span className="px-2.5 py-0.5 rounded text-[11px] font-mono font-medium text-zinc-400 bg-zinc-800 border border-zinc-700">
+                    UNTESTED
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-zinc-400 mt-1">
+                Executes the generated Playwright test script inside an isolated headless Chromium environment to verify reproducibility
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-2.5">
+            {testRuns.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowRunsHistory(!showRunsHistory)}
+                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-surface-elevated hover:bg-zinc-800 text-zinc-300 text-xs font-medium border border-border transition-colors cursor-pointer"
+              >
+                <History className="w-3.5 h-3.5 text-zinc-400" />
+                <span>{testRuns.length} Runs</span>
+                {showRunsHistory ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={handleRunCloudTest}
+              disabled={runningTest || !incident.generated_playwright_test}
+              className="flex items-center space-x-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            >
+              {runningTest ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span>Executing in Cloud...</span>
+                </>
+              ) : (
+                <>
+                  <Play className="w-4 h-4 fill-current" />
+                  <span>Run Test in Cloud</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* History Accordion */}
+        {showRunsHistory && testRuns.length > 0 && (
+          <div className="p-3 bg-background border border-border rounded-lg space-y-2">
+            <span className="text-[11px] font-mono text-zinc-400 uppercase font-semibold block">Execution History</span>
+            <div className="divide-y divide-border/50 max-h-48 overflow-y-auto">
+              {testRuns.map((run, idx) => (
+                <div key={run.id} className="py-2 flex items-center justify-between text-xs font-mono">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-zinc-500">#{testRuns.length - idx}</span>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                      run.status === 'REPRODUCED' ? 'text-emerald-400 bg-emerald-500/10' :
+                      run.status === 'PASSED' ? 'text-blue-400 bg-blue-500/10' :
+                      run.status === 'RUNNING' ? 'text-amber-400 bg-amber-500/10' :
+                      'text-red-400 bg-red-500/10'
+                    }`}>
+                      {run.status}
+                    </span>
+                    <span className="text-zinc-400">{run.duration_ms}ms</span>
+                  </div>
+                  <span className="text-zinc-500 text-[11px]">
+                    {new Date(run.created_at).toLocaleString()}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Terminal Execution Output Console */}
+        {(incident.test_logs || incident.test_status === 'RUNNING' || testError) && (
+          <div className="border border-border rounded-lg overflow-hidden bg-[#090d16]">
+            <div className="px-3.5 py-2 bg-surface-elevated/70 border-b border-border flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <div className="flex space-x-1.5">
+                  <div className="w-2.5 h-2.5 rounded-full bg-red-500/70" />
+                  <div className="w-2.5 h-2.5 rounded-full bg-amber-500/70" />
+                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-500/70" />
+                </div>
+                <span className="text-[11px] font-mono text-zinc-400 pl-2">
+                  Headless Playwright Execution Console (incident-{incident.id.slice(0, 8)}.spec.js)
+                </span>
+              </div>
+              <div className="flex items-center space-x-3 text-[11px] font-mono text-zinc-400">
+                {incident.test_duration_ms && (
+                  <span>Duration: <strong className="text-zinc-200">{incident.test_duration_ms}ms</strong></span>
+                )}
+                {incident.test_last_run_at && (
+                  <span>Executed: <strong className="text-zinc-200">{new Date(incident.test_last_run_at).toLocaleTimeString()}</strong></span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setShowLogs(!showLogs)}
+                  className="text-zinc-400 hover:text-white cursor-pointer"
+                >
+                  {showLogs ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+            </div>
+
+            {showLogs && (
+              <pre className="p-4 font-mono text-xs text-zinc-300 leading-relaxed overflow-x-auto max-h-72 m-0 select-text whitespace-pre-wrap">
+                {runningTest ? (
+                  <span className="text-amber-400 animate-pulse">
+                    [BugReplay Cloud Runner] Spawning headless Chromium worker...{"\n"}
+                    [BugReplay Cloud Runner] Navigating to {incident.page_url}...{"\n"}
+                    [BugReplay Cloud Runner] Applying route mocks and executing user click sequence...
+                  </span>
+                ) : testError ? (
+                  <span className="text-red-400">{testError}</span>
+                ) : (
+                  incident.test_logs || '[BugReplay Cloud Runner] Ready to execute reproduction test.'
+                )}
+              </pre>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Synthesized Playwright Test Section (Full Width) */}

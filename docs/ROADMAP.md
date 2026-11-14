@@ -39,11 +39,18 @@ The current implementation encompasses:
 - [x] **Real-Time Server-Sent Events (SSE) Stream (`/api/v1/incidents/stream`):** Instant browser updates for newly ingested incidents, recurring occurrences, and completed Playwright scripts without client polling.
 - [x] **Sliding-Window Rate Limiting & Correlation IDs:** Multi-tier rate limiting with RFC-compliant headers (`RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset`) and `X-Request-Id` tracing.
 
-### v1.4 — Developer Ecosystem & Framework SDKs (Current Release)
+### v1.4 — Developer Ecosystem & Framework SDKs (Released)
 - [x] **`@bugreplay/react` Official React SDK:** React 18 & 19 compatibility with `<BugReplayProvider>`, `<BugReplayErrorBoundary>` capturing React component stack traces, custom fallback cards, `useBugReplay()` hook, and `withBugReplay()` HOC.
 - [x] **`@bugreplay/next` Official Next.js SDK:** Support for App Router and Pages Router, `<BugReplayNextScript>` non-blocking layout injection, `captureNextError()` extracting Next.js error digests and route context, and `withBugReplayApi()` server route wrapping.
 - [x] **Core `@bugreplay/sdk` Modern ESM & TypeScript:** Modern ES module exports map, comprehensive `.d.ts` definitions, and SSR-safe execution across Node and edge runtimes.
 - [x] **Monorepo Workspaces & Comprehensive Testing:** Integrated root workspaces with 100% test pass rate across 70 unit and integration tests.
+
+### v1.5 — In-Dashboard Playwright Test Execution & Verification Engine (Current Release)
+- [x] **Headless Chromium Cloud Test Runner (`TestRunnerService`):** Automatic sandbox provisioning in temporary directories executing synthesized Playwright tests with list reporter, timeouts, and process lifecycle cleanup.
+- [x] **Verification State Machine & Schema Migration (`005_test_execution_engine`):** Adds `test_status` (`UNTESTED`, `RUNNING`, `REPRODUCED`, `PASSED`, `ERROR`), `test_duration_ms`, `test_logs`, and durable `test_runs` history table.
+- [x] **API Test Execution & History Endpoints:** `POST /api/v1/incidents/:id/run-test`, `GET /api/v1/incidents/:id/test-runs`, and `GET /api/v1/incidents/:id/test-run/latest`.
+- [x] **Interactive Dashboard Execution Console:** Real-time "Run Test in Cloud" button, animated execution spinners, verification badges, collapsible macOS-style dark terminal viewer with stdout/stderr, and historical runs selector.
+- [x] **Real-Time SSE Sync:** Broadcasts `test_run.started` and `test_run.completed` to auto-refresh incident details and dashboard verification badges without page reloads.
 
 ---
 

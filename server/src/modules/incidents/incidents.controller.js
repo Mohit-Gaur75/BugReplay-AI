@@ -79,6 +79,33 @@ export class IncidentsController {
     }
   }
 
+  static async runTest(req, res, next) {
+    try {
+      const result = await IncidentsService.runTest(req.user.id, req.params.id, req.body || {});
+      return successResponse(res, result, 'Playwright test executed successfully', 200);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static getTestRuns(req, res, next) {
+    try {
+      const testRuns = IncidentsService.getTestRuns(req.user.id, req.params.id);
+      return successResponse(res, { testRuns }, 'Incident test runs retrieved successfully', 200);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static getLatestTestRun(req, res, next) {
+    try {
+      const testRun = IncidentsService.getLatestTestRun(req.user.id, req.params.id);
+      return successResponse(res, { testRun }, 'Latest incident test run retrieved successfully', 200);
+    } catch (err) {
+      next(err);
+    }
+  }
+
   static stream(req, res, next) {
     try {
       res.setHeader('Content-Type', 'text/event-stream');

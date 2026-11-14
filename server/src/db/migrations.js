@@ -169,6 +169,42 @@ const migrationsList = [
         db.exec(`CREATE INDEX IF NOT EXISTS idx_jobs_scheduling ON jobs(status, scheduled_at);`);
       }
     }
+  },
+  {
+    name: '005_test_execution_engine',
+    up: (db) => {
+      // 1. Incidents table: test execution status, duration, and latest output
+      const incidentCols = db.prepare("PRAGMA table_info('incidents')").all().map((c) => c.name);
+      if (!incidentCols.includes('test_status')) {
+        db.exec(`ALTER TABLE incidents ADD COLUMN test_status TEXT DEFAULT 'UNTESTED';`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_incidents_test_status ON incidents(test_status);`);
+      }
+      if (!incidentCols.includes('test_last_run_at')) {
+        db.exec(`ALTER TABLE incidents ADD COLUMN test_last_run_at DATETIME DEFAULT NULL;`);
+      }
+      if (!incidentCols.includes('test_duration_ms')) {
+        db.exec(`ALTER TABLE incidents ADD COLUMN test_duration_ms INTEGER DEFAULT NULL;`);
+      }
+      if (!incidentCols.includes('test_logs')) {
+        db.exec(`ALTER TABLE incidents ADD COLUMN test_logs TEXT DEFAULT NULL;`);
+      }
+
+      // 2. Test Runs history table
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS test_runs (
+          id TEXT PRIMARY KEY,
+          incident_id TEXT NOT NULL,
+          status TEXT DEFAULT 'QUEUED',
+          exit_code INTEGER DEFAULT NULL,
+          logs TEXT DEFAULT '',
+          duration_ms INTEGER DEFAULT 0,
+          error_details TEXT DEFAULT NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (incident_id) REFERENCES incidents(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_test_runs_incident ON test_runs(incident_id, created_at);
+      `);
+    }
   }
 ];
 
