@@ -24,11 +24,20 @@ The current implementation encompasses:
 - [x] **Multi-Framework Test Export (Cypress & Puppeteer):** Interactive framework switcher tab in dashboard allowing instant conversion and download of tests as Playwright (`.spec.js`), Cypress (`.cy.js`), or Puppeteer (`.js`).
 - [x] **Enhanced Network Payload Capture:** Configurable allowlist (`data-capture-body-urls` / `captureBodyUrls`) for request/response bodies with automated PII & credit-card redaction, improving route mocking fidelity for complex GraphQL and REST APIs.
 
-### v1.2 — Developer Tools & Synthesis Acceleration (Current Release)
+### v1.2 — Developer Tools & Synthesis Acceleration (Released)
 - [x] **1-Click cURL Reproduction:** Instant cURL command generator with captured headers, method, and allowlisted payload data.
 - [x] **Component Test Synthesis (React Testing Library):** Converts Playwright telemetry into `@testing-library/react` + `vitest` unit tests with mocked global `fetch`.
 - [x] **Unified Git Patch (`fix.patch`) Generator:** Exports a standardized Git patch with test reproduction suite ready for `git apply fix.patch`.
 - [x] **Automated Fix PR Generator:** Direct GitHub Pull Request creation via GitHub REST API pushing synthesized `.spec.js` test suites and opening PRs directly in the user's repository.
+
+### v1.3 — Advanced Backend & Enterprise Reliability (Current Release)
+- [x] **Canonical Incident Fingerprinting & Deduplication:** Normalized SHA-256 error hashes scrubbing transient UUIDs, timestamps, and line numbers to group recurring production crashes, prevent telemetry storms, and track `occurrence_count`.
+- [x] **Resilient Circuit Breaker for External AI APIs:** 3-state state machine (Closed, Open, Half-Open) providing sub-millisecond fail-fast to deterministic heuristic synthesis when external LLMs experience rate limits or outages.
+- [x] **Distributed Worker Job Leasing:** Atomic worker lease locks (`status='PROCESSING'`, `locked_by`, `locked_at`) with automatic stale worker reclamation (>60s) and exponential backoff retry scheduling.
+- [x] **Prometheus / OpenMetrics Telemetry Exporter (`GET /metrics`):** Production metrics tracking HTTP request counts, latency histograms, queue backlog depth, memory RSS, and active SSE subscribers.
+- [x] **Cloud & Kubernetes Probes (`/health/live`, `/health/ready`):** Deep subsystem readiness checks validating SQLite write transactions, queue saturation, and circuit health.
+- [x] **Real-Time Server-Sent Events (SSE) Stream (`/api/v1/incidents/stream`):** Instant browser updates for newly ingested incidents, recurring occurrences, and completed Playwright scripts without client polling.
+- [x] **Sliding-Window Rate Limiting & Correlation IDs:** Multi-tier rate limiting with RFC-compliant headers (`RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset`) and `X-Request-Id` tracing.
 
 ---
 
