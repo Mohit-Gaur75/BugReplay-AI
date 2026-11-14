@@ -45,12 +45,20 @@ The current implementation encompasses:
 - [x] **Core `@bugreplay/sdk` Modern ESM & TypeScript:** Modern ES module exports map, comprehensive `.d.ts` definitions, and SSR-safe execution across Node and edge runtimes.
 - [x] **Monorepo Workspaces & Comprehensive Testing:** Integrated root workspaces with 100% test pass rate across 70 unit and integration tests.
 
-### v1.5 — In-Dashboard Playwright Test Execution & Verification Engine (Current Release)
+### v1.5 — In-Dashboard Playwright Test Execution & Verification Engine (Released)
 - [x] **Headless Chromium Cloud Test Runner (`TestRunnerService`):** Automatic sandbox provisioning in temporary directories executing synthesized Playwright tests with list reporter, timeouts, and process lifecycle cleanup.
 - [x] **Verification State Machine & Schema Migration (`005_test_execution_engine`):** Adds `test_status` (`UNTESTED`, `RUNNING`, `REPRODUCED`, `PASSED`, `ERROR`), `test_duration_ms`, `test_logs`, and durable `test_runs` history table.
 - [x] **API Test Execution & History Endpoints:** `POST /api/v1/incidents/:id/run-test`, `GET /api/v1/incidents/:id/test-runs`, and `GET /api/v1/incidents/:id/test-run/latest`.
 - [x] **Interactive Dashboard Execution Console:** Real-time "Run Test in Cloud" button, animated execution spinners, verification badges, collapsible macOS-style dark terminal viewer with stdout/stderr, and historical runs selector.
 - [x] **Real-Time SSE Sync:** Broadcasts `test_run.started` and `test_run.completed` to auto-refresh incident details and dashboard verification badges without page reloads.
+
+### v1.6 — Multi-User Team Management & Role-Based Access Control (RBAC) (Current Release)
+- [x] **Hierarchical RBAC Engine & Middleware:** 4-tier permission hierarchy (`OWNER` > `ADMIN` > `MEMBER` > `VIEWER`) with rank validation and route-level authorization via `requireProjectRole(minRole)`.
+- [x] **Team Database Schema Migration (`006_team_management_rbac`):** Creates indexed `project_members` and `project_invitations` tables, auto-backfilling existing projects to assign creators as `OWNER`.
+- [x] **Dual Invitation & Auto-Claim Architecture (`TeamsService`):** Instant project enrollment for existing users and cryptographic token-based invitations for pending users, automatically claimed upon user registration.
+- [x] **Incident & Operation Permission Guards:** Restricts destructive actions (`deleteProject`, `rotateKey`) to `OWNER`/`ADMIN`, enforces incident triaging and test execution guards against read-only `VIEWER` seats.
+- [x] **Full-Featured Team Management UI:** Interactive Team & RBAC modal on Projects dashboard with role badges (`OWNER`, `ADMIN`, `MEMBER`, `VIEWER`), email invitation dispatch, dynamic role promotion/demotion, member removal, pending invitation revocation, and role permission capability guide.
+- [x] **100% Automated Monorepo Coverage:** 11 dedicated team management tests in `teams.test.js` bringing total monorepo test coverage to 89 passing automated tests.
 
 ---
 

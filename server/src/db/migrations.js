@@ -205,6 +205,57 @@ const migrationsList = [
         CREATE INDEX IF NOT EXISTS idx_test_runs_incident ON test_runs(incident_id, created_at);
       `);
     }
+  },
+  {
+    name: '006_team_management_rbac',
+    up: (db) => {
+      // 1. Project Members table
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS project_members (
+          id TEXT PRIMARY KEY,
+          project_id TEXT NOT NULL,
+          user_id TEXT NOT NULL,
+          role TEXT NOT NULL DEFAULT 'MEMBER',
+          invited_by TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+          UNIQUE(project_id, user_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_project_members_user ON project_members(user_id);
+        CREATE INDEX IF NOT EXISTS idx_project_members_project ON project_members(project_id);
+      `);
+
+      // 2. Project Invitations table
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS project_invitations (
+          id TEXT PRIMARY KEY,
+          project_id TEXT NOT NULL,
+          email TEXT NOT NULL,
+          role TEXT NOT NULL DEFAULT 'MEMBER',
+          token TEXT UNIQUE NOT NULL,
+          invited_by TEXT NOT NULL,
+          status TEXT DEFAULT 'PENDING',
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          expires_at DATETIME NOT NULL,
+          FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+          FOREIGN KEY (invited_by) REFERENCES users(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_project_invitations_lookup ON project_invitations(project_id, email, status);
+        CREATE INDEX IF NOT EXISTS idx_project_invitations_token ON project_invitations(token);
+      `);
+
+      // 3. Backfill existing projects: ensure creator is OWNER
+      const existingProjects = db.prepare('SELECT id, user_id, created_at FROM projects').all();
+      const insertMember = db.prepare(`
+        INSERT OR IGNORE INTO project_members (id, project_id, user_id, role, created_at)
+        VALUES (?, ?, ?, 'OWNER', ?)
+      `);
+
+      for (const p of existingProjects) {
+        insertMember.run(crypto.randomUUID(), p.id, p.user_id, p.created_at);
+      }
+    }
   }
 ];
 

@@ -15,4 +15,11 @@ router.post('/:id/rotate-key', ProjectsController.rotateKey);
 router.post('/:id/test-webhook', ProjectsController.testWebhook);
 router.delete('/:id', ProjectsController.delete);
 
+// Team Management & Role-Based Access Control (RBAC)
+router.get('/:id/members', ProjectsController.getMembers);
+router.post('/:id/members/invite', ProjectsController.inviteMember);
+router.patch('/:id/members/:memberId', ProjectsController.updateMemberRole);
+router.delete('/:id/members/:memberId', ProjectsController.removeMember);
+router.delete('/:id/invitations/:invitationId', ProjectsController.revokeInvitation);
+
 export default router;

@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { getDb } from '../../db/db.js';
 import { hashPassword, comparePassword, generateToken } from '../../utils/crypto.js';
+import { TeamsService } from '../projects/teams.service.js';
 
 export class AuthService {
   static async register({ email, password }) {
@@ -34,6 +35,11 @@ export class AuthService {
     });
 
     insertUserTx();
+
+    // Automatically claim any pending team invitations for this email
+    try {
+      TeamsService.claimPendingInvitations(userId, email);
+    } catch {}
 
     const user = {
       id: userId,

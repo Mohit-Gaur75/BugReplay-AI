@@ -1,4 +1,5 @@
 import { ProjectsService } from './projects.service.js';
+import { TeamsService } from './teams.service.js';
 import { createProjectSchema, updateProjectSchema } from './projects.validation.js';
 import { successResponse } from '../../utils/response.js';
 
@@ -63,6 +64,51 @@ export class ProjectsController {
     try {
       const result = await ProjectsService.testWebhook(req.user.id, req.params.id);
       return successResponse(res, result, 'Test webhook dispatched', 200);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static getMembers(req, res, next) {
+    try {
+      const result = TeamsService.getMembers(req.user.id, req.params.id);
+      return successResponse(res, result, 'Project members retrieved successfully', 200);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static inviteMember(req, res, next) {
+    try {
+      const result = TeamsService.inviteMember(req.user.id, req.params.id, req.body || {});
+      return successResponse(res, result, result.message, 201);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static updateMemberRole(req, res, next) {
+    try {
+      const result = TeamsService.updateMemberRole(req.user.id, req.params.id, req.params.memberId, req.body?.role);
+      return successResponse(res, result, result.message, 200);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static removeMember(req, res, next) {
+    try {
+      const result = TeamsService.removeMember(req.user.id, req.params.id, req.params.memberId);
+      return successResponse(res, result, result.message, 200);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static revokeInvitation(req, res, next) {
+    try {
+      const result = TeamsService.revokeInvitation(req.user.id, req.params.id, req.params.invitationId);
+      return successResponse(res, result, result.message, 200);
     } catch (err) {
       next(err);
     }

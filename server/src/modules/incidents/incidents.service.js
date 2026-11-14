@@ -7,8 +7,8 @@ export class IncidentsService {
     const db = getDb();
     const offset = (Math.max(1, page) - 1) * limit;
 
-    const whereClauses = ['p.user_id = ?'];
-    const params = [userId];
+    const whereClauses = ['(p.user_id = ? OR EXISTS (SELECT 1 FROM project_members pm WHERE pm.project_id = p.id AND pm.user_id = ?))'];
+    const params = [userId, userId];
 
     if (projectId) {
       whereClauses.push('i.project_id = ?');
@@ -83,11 +83,13 @@ export class IncidentsService {
       SELECT 
         i.*,
         p.name as project_name,
-        p.allowed_domains
+        p.allowed_domains,
+        COALESCE(pm.role, CASE WHEN p.user_id = ? THEN 'OWNER' ELSE 'MEMBER' END) as user_role
       FROM incidents i
       JOIN projects p ON p.id = i.project_id
-      WHERE i.id = ? AND p.user_id = ?
-    `).get(incidentId, userId);
+      LEFT JOIN project_members pm ON pm.project_id = p.id AND pm.user_id = ?
+      WHERE i.id = ? AND (p.user_id = ? OR pm.user_id = ?)
+    `).get(userId, userId, incidentId, userId, userId);
 
     if (!row) {
       const error = new Error('Incident not found or you do not have permission to access it.');
@@ -120,48 +122,38 @@ export class IncidentsService {
       throw error;
     }
 
-    const db = getDb();
-    const existing = db.prepare(`
-      SELECT i.id FROM incidents i
-      JOIN projects p ON p.id = i.project_id
-      WHERE i.id = ? AND p.user_id = ?
-    `).get(incidentId, userId);
-
-    if (!existing) {
-      const error = new Error('Incident not found or you do not have permission to update it.');
-      error.statusCode = 404;
-      error.code = 'INCIDENT_NOT_FOUND';
+    const incident = this.getIncidentById(userId, incidentId);
+    if (incident.user_role === 'VIEWER') {
+      const error = new Error('Viewers have read-only access and cannot update incident status.');
+      error.statusCode = 403;
+      error.code = 'INSUFFICIENT_PERMISSIONS';
       error.isOperational = true;
       throw error;
     }
 
+    const db = getDb();
     db.prepare('UPDATE incidents SET status = ? WHERE id = ?').run(upperStatus, incidentId);
 
     return this.getIncidentById(userId, incidentId);
   }
 
   static regenerate(userId, incidentId) {
-    const db = getDb();
-    const existing = db.prepare(`
-      SELECT i.id, i.project_id FROM incidents i
-      JOIN projects p ON p.id = i.project_id
-      WHERE i.id = ? AND p.user_id = ?
-    `).get(incidentId, userId);
-
-    if (!existing) {
-      const error = new Error('Incident not found or you do not have permission to regenerate it.');
-      error.statusCode = 404;
-      error.code = 'INCIDENT_NOT_FOUND';
+    const incident = this.getIncidentById(userId, incidentId);
+    if (incident.user_role === 'VIEWER') {
+      const error = new Error('Viewers have read-only access and cannot regenerate tests.');
+      error.statusCode = 403;
+      error.code = 'INSUFFICIENT_PERMISSIONS';
       error.isOperational = true;
       throw error;
     }
 
+    const db = getDb();
     const reTx = db.transaction(() => {
       db.prepare("UPDATE incidents SET generation_status = 'PENDING' WHERE id = ?").run(incidentId);
       db.prepare(`
         INSERT INTO jobs (id, type, payload, status)
         VALUES (?, 'AI_SYNTHESIS', ?, 'PENDING')
-      `).run(crypto.randomUUID(), JSON.stringify({ incidentId, projectId: existing.project_id }));
+      `).run(crypto.randomUUID(), JSON.stringify({ incidentId, projectId: incident.project_id }));
     });
 
     reTx();
@@ -170,21 +162,16 @@ export class IncidentsService {
   }
 
   static deleteIncident(userId, incidentId) {
-    const db = getDb();
-    const existing = db.prepare(`
-      SELECT i.id FROM incidents i
-      JOIN projects p ON p.id = i.project_id
-      WHERE i.id = ? AND p.user_id = ?
-    `).get(incidentId, userId);
-
-    if (!existing) {
-      const error = new Error('Incident not found or you do not have permission to delete it.');
-      error.statusCode = 404;
-      error.code = 'INCIDENT_NOT_FOUND';
+    const incident = this.getIncidentById(userId, incidentId);
+    if (incident.user_role !== 'OWNER' && incident.user_role !== 'ADMIN') {
+      const error = new Error('Only project owners and administrators can delete incidents.');
+      error.statusCode = 403;
+      error.code = 'INSUFFICIENT_PERMISSIONS';
       error.isOperational = true;
       throw error;
     }
 
+    const db = getDb();
     db.prepare('DELETE FROM incidents WHERE id = ?').run(incidentId);
 
     return { id: incidentId, deleted: true };
@@ -369,6 +356,14 @@ npx playwright test ${testPath} --headed
 
   static async runTest(userId, incidentId, options = {}) {
     const incident = this.getIncidentById(userId, incidentId);
+
+    if (incident.user_role === 'VIEWER') {
+      const error = new Error('Viewers have read-only access and cannot run cloud tests.');
+      error.statusCode = 403;
+      error.code = 'INSUFFICIENT_PERMISSIONS';
+      error.isOperational = true;
+      throw error;
+    }
 
     if (!incident.generated_playwright_test) {
       const error = new Error('No synthesized Playwright test exists for this incident yet.');
