@@ -28,7 +28,14 @@ import {
   XCircle,
   ChevronDown,
   ChevronUp,
-  History
+  History,
+  Wifi,
+  WifiOff,
+  BatteryCharging,
+  BatteryMedium,
+  BatteryWarning,
+  Cpu,
+  Activity
 } from 'lucide-react';
 
 export default function IncidentDetails({ incidentId, onBack }) {
@@ -300,6 +307,144 @@ export default function IncidentDetails({ incidentId, onBack }) {
               <span className="font-mono text-red-400 font-semibold block">
                 {incident.error_type || 'Error'}
               </span>
+            </div>
+          </div>
+
+          {/* Device & Network Health Pills Ribbon */}
+          <div className="p-4 bg-surface border border-border rounded-xl space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-zinc-300 flex items-center space-x-2">
+                <Activity className="w-4 h-4 text-emerald-400" />
+                <span>Device & Network Health Signals</span>
+              </span>
+              <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">
+                Client Environment
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+              {/* 1. Network Health Pill */}
+              <div className="p-2.5 rounded-lg bg-surface-elevated/40 border border-border-subtle flex items-start space-x-2.5">
+                <div className={`p-1.5 rounded-md mt-0.5 ${
+                  incident.device_health?.network?.online === false
+                    ? 'bg-red-500/10 text-red-400 border border-red-500/20'
+                    : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                }`}>
+                  {incident.device_health?.network?.online === false ? (
+                    <WifiOff className="w-4 h-4" />
+                  ) : (
+                    <Wifi className="w-4 h-4" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center space-x-1.5">
+                    <span className="font-semibold text-zinc-200">
+                      {incident.device_health?.network?.online === false
+                        ? 'Offline'
+                        : incident.device_health?.network?.effectiveType && incident.device_health.network.effectiveType !== 'unknown'
+                        ? `${incident.device_health.network.effectiveType.toUpperCase()} Network`
+                        : 'Online (Connected)'}
+                    </span>
+                    {incident.device_health?.network?.online !== false && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    )}
+                  </div>
+                  <div className="text-[11px] text-zinc-400 mt-0.5 font-mono">
+                    {incident.device_health?.network?.downlink
+                      ? `${incident.device_health.network.downlink} Mbps Downlink`
+                      : 'Speed nominal'}
+                    {incident.device_health?.network?.rtt
+                      ? ` • ${incident.device_health.network.rtt}ms RTT`
+                      : ''}
+                    {incident.device_health?.network?.saveData && (
+                      <span className="ml-1 text-amber-400 font-bold">(Data Saver ON)</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* 2. Battery & Power Pill */}
+              <div className="p-2.5 rounded-lg bg-surface-elevated/40 border border-border-subtle flex items-start space-x-2.5">
+                <div className={`p-1.5 rounded-md mt-0.5 ${
+                  incident.device_health?.battery?.charging
+                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                    : (incident.device_health?.battery?.level || 100) < 20
+                    ? 'bg-red-500/10 text-red-400 border border-red-500/20'
+                    : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                }`}>
+                  {incident.device_health?.battery?.charging ? (
+                    <BatteryCharging className="w-4 h-4" />
+                  ) : (incident.device_health?.battery?.level || 100) < 20 ? (
+                    <BatteryWarning className="w-4 h-4" />
+                  ) : (
+                    <BatteryMedium className="w-4 h-4" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center space-x-1.5">
+                    <span className="font-semibold text-zinc-200">
+                      {incident.device_health?.battery
+                        ? `${incident.device_health.battery.level}% Battery`
+                        : 'Power: AC / Normal'}
+                    </span>
+                    {incident.device_health?.battery?.charging && (
+                      <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-emerald-500/20 text-emerald-300 font-bold">
+                        CHARGING
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-zinc-400 mt-0.5 font-mono">
+                    {incident.device_health?.battery
+                      ? (incident.device_health.battery.charging ? 'Plugged into power source' : 'Running on battery power')
+                      : 'Standard device power supply'}
+                  </div>
+                </div>
+              </div>
+
+              {/* 3. Hardware & Compute Pill */}
+              <div className="p-2.5 rounded-lg bg-surface-elevated/40 border border-border-subtle flex items-start space-x-2.5">
+                <div className="p-1.5 rounded-md mt-0.5 bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                  <Cpu className="w-4 h-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <span className="font-semibold text-zinc-200 block">
+                    {incident.device_health?.device?.cores
+                      ? `${incident.device_health.device.cores} CPU Cores`
+                      : 'Multi-Core Processor'}
+                    {incident.device_health?.device?.memoryGb
+                      ? ` • ${incident.device_health.device.memoryGb} GB RAM`
+                      : ''}
+                  </span>
+                  <div className="text-[11px] text-zinc-400 mt-0.5 font-mono truncate">
+                    Arch: {typeof navigator !== 'undefined' ? navigator.platform || '64-bit' : '64-bit'} • Viewport: {incident.viewport || '1440x900'}
+                  </div>
+                </div>
+              </div>
+
+              {/* 4. Display & Environment Pill */}
+              <div className="p-2.5 rounded-lg bg-surface-elevated/40 border border-border-subtle flex items-start space-x-2.5">
+                <div className="p-1.5 rounded-md mt-0.5 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                  <Monitor className="w-4 h-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center space-x-1.5">
+                    <span className="font-semibold text-zinc-200 truncate">
+                      {incident.device_health?.device?.screenResolution || incident.viewport || 'Desktop Display'}
+                    </span>
+                    {incident.device_health?.device?.dpr && (
+                      <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-indigo-500/20 text-indigo-300 font-bold">
+                        {incident.device_health.device.dpr}x DPR
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-zinc-400 mt-0.5 font-mono flex items-center space-x-1">
+                    <span>Theme: {incident.device_health?.device?.colorScheme === 'dark' ? 'Dark' : 'Light'}</span>
+                    {incident.device_health?.device?.reducedMotion && (
+                      <span className="text-amber-400">• Reduced Motion</span>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 

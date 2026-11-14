@@ -299,6 +299,15 @@ const migrationsList = [
         CREATE INDEX IF NOT EXISTS idx_audit_logs_actor ON audit_logs(actor_id);
       `);
     }
+  },
+  {
+    name: '008_device_network_health',
+    up: (db) => {
+      const cols = db.prepare("PRAGMA table_info('incidents')").all().map((c) => c.name);
+      if (!cols.includes('device_health_json')) {
+        db.exec(`ALTER TABLE incidents ADD COLUMN device_health_json TEXT DEFAULT NULL;`);
+      }
+    }
   }
 ];
 

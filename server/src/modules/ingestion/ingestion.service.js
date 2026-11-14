@@ -29,13 +29,16 @@ export class IngestionService {
     if (existing) {
       // Deduplicate: increment occurrence count and record usage
       const newCount = (existing.occurrence_count || 1) + 1;
+      const deviceHealthJson = data.deviceHealth ? JSON.stringify(data.deviceHealth) : null;
+
       const dedupeTx = db.transaction(() => {
         db.prepare(`
           UPDATE incidents SET
             occurrence_count = ?,
-            last_seen_at = CURRENT_TIMESTAMP
+            last_seen_at = CURRENT_TIMESTAMP,
+            device_health_json = COALESCE(?, device_health_json)
           WHERE id = ?
-        `).run(newCount, existing.id);
+        `).run(newCount, deviceHealthJson, existing.id);
 
         db.prepare(`
           INSERT INTO usage_records (id, project_id, billing_period, incident_count, updated_at)
@@ -70,9 +73,10 @@ export class IngestionService {
     const incidentId = crypto.randomUUID();
     const jobId = crypto.randomUUID();
     const telemetryJson = JSON.stringify(data.telemetry || []);
+    const deviceHealthJson = data.deviceHealth ? JSON.stringify(data.deviceHealth) : null;
 
     const ingestTx = db.transaction(() => {
-      // 1. Insert Incident Record with Fingerprint
+      // 1. Insert Incident Record with Fingerprint and Device Health
       db.prepare(`
         INSERT INTO incidents (
           id,
@@ -83,13 +87,14 @@ export class IngestionService {
           page_url,
           user_agent,
           viewport,
+          device_health_json,
           telemetry_json,
           fingerprint,
           occurrence_count,
           last_seen_at,
           status,
           generation_status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP, 'OPEN', 'PENDING')
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP, 'OPEN', 'PENDING')
       `).run(
         incidentId,
         project.project_id,
@@ -99,6 +104,7 @@ export class IngestionService {
         data.pageUrl,
         data.userAgent,
         data.viewport,
+        deviceHealthJson,
         telemetryJson,
         fingerprint
       );

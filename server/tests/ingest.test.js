@@ -234,4 +234,35 @@ describe('Phase 4: Telemetry Ingestion & Incident Management APIs', () => {
     assert.equal(res.body.data.pullRequestNumber, 101);
     assert.ok(res.body.data.branch.startsWith('bugreplay/repro-'));
   });
+
+  test('POST /api/v1/ingest captures and stores Device & Network Health signals', async () => {
+    const healthPayload = {
+      ...sampleIncidentPayload,
+      errorMessage: 'ReferenceError: window.deviceHealth is undefined',
+      deviceHealth: {
+        network: { online: true, effectiveType: '4g', downlink: 10.5, rtt: 45, saveData: false },
+        device: { memoryGb: 16, cores: 8, dpr: 2, screenResolution: '2560x1440', colorScheme: 'dark', reducedMotion: false, orientation: 'landscape' },
+        battery: { level: 92, charging: true },
+      },
+    };
+
+    const res = await request(app)
+      .post('/api/v1/ingest')
+      .set('x-api-key', rawApiKey)
+      .set('Origin', 'http://localhost:5173')
+      .send(healthPayload);
+
+    assert.equal(res.status, 202);
+    const healthIncidentId = res.body.incidentId;
+
+    const getRes = await request(app)
+      .get(`/api/v1/incidents/${healthIncidentId}`)
+      .set('Authorization', `Bearer ${userToken}`);
+
+    assert.equal(getRes.status, 200);
+    assert.ok(getRes.body.data.incident.device_health);
+    assert.equal(getRes.body.data.incident.device_health.network.effectiveType, '4g');
+    assert.equal(getRes.body.data.incident.device_health.device.cores, 8);
+    assert.equal(getRes.body.data.incident.device_health.battery.level, 92);
+  });
 });

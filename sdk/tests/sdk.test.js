@@ -26,7 +26,7 @@ const mockModule = { exports: {} };
 const evaluateSdk = new Function('window', 'document', 'module', sdkCode);
 evaluateSdk(mockWindow, mockDocument, mockModule);
 
-const { RingBuffer, scrubText, scrubUrl, isSensitiveElement, scrubPayload, BugReplayClient } = mockModule.exports;
+const { RingBuffer, scrubText, scrubUrl, isSensitiveElement, scrubPayload, BugReplayClient, getDeviceAndNetworkHealth } = mockModule.exports;
 
 describe('Phase 3: Client Capture SDK Subsystems', () => {
   describe('Rolling Ring Buffer', () => {
@@ -135,6 +135,17 @@ describe('Phase 3: Client Capture SDK Subsystems', () => {
       assert.equal(client.shouldCaptureBody('/checkout/12345'), true);
       assert.equal(client.shouldCaptureBody('/api/v1/analytics'), false);
       assert.equal(client.shouldCaptureBody('/static/bundle.js'), false);
+    });
+  });
+
+  describe('Device & Network Health Signals', () => {
+    test('getDeviceAndNetworkHealth extracts hardware, network, and battery information safely', () => {
+      assert.ok(typeof getDeviceAndNetworkHealth === 'function');
+      const health = getDeviceAndNetworkHealth();
+      assert.ok(health, 'Expected health object');
+      assert.ok(health.device, 'Expected device object');
+      assert.ok('dpr' in health.device);
+      assert.ok('colorScheme' in health.device);
     });
   });
 });

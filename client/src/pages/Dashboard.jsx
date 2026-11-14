@@ -321,8 +321,29 @@ export default function Dashboard({ onSelectIncident, onGoToDemo, onGoToProjects
                           </span>
                         )}
                       </div>
-                      <div className="text-[11px] font-mono text-zinc-500 truncate mt-0.5">
-                        {incident.page_url}
+                      <div className="text-[11px] font-mono text-zinc-500 truncate mt-0.5 flex items-center space-x-2">
+                        <span className="truncate">{incident.page_url}</span>
+                        {incident.device_health?.network && (
+                          <span className={`px-1.5 py-0.2 rounded text-[9px] font-mono font-bold shrink-0 border ${
+                            incident.device_health.network.online === false
+                              ? 'bg-red-500/10 border-red-500/30 text-red-400'
+                              : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                          }`}>
+                            {incident.device_health.network.online === false
+                              ? 'OFFLINE'
+                              : (incident.device_health.network.effectiveType || 'ONLINE').toUpperCase()}
+                          </span>
+                        )}
+                        {incident.device_health?.battery?.charging && (
+                          <span className="text-[10px] text-emerald-400 shrink-0" title="Device was charging">
+                            ⚡
+                          </span>
+                        )}
+                        {incident.viewport && (
+                          <span className="px-1.5 py-0.2 rounded text-[9px] font-mono text-zinc-400 bg-surface border border-border shrink-0">
+                            {parseInt(incident.viewport.split('x')[0], 10) < 768 ? 'Mobile' : 'Desktop'}
+                          </span>
+                        )}
                       </div>
                     </td>
 

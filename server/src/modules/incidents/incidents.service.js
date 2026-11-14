@@ -49,6 +49,7 @@ export class IncidentsService {
         i.page_url,
         i.viewport,
         i.user_agent,
+        i.device_health_json,
         i.status,
         i.generation_status,
         i.confidence,
@@ -66,8 +67,21 @@ export class IncidentsService {
       LIMIT ? OFFSET ?
     `).all(...params, limit, offset);
 
+    const incidents = rows.map((r) => {
+      let deviceHealth = null;
+      if (r.device_health_json) {
+        try {
+          deviceHealth = JSON.parse(r.device_health_json);
+        } catch {}
+      }
+      return {
+        ...r,
+        device_health: deviceHealth,
+      };
+    });
+
     return {
-      incidents: rows,
+      incidents,
       pagination: {
         page: Number(page),
         limit: Number(limit),
@@ -105,9 +119,17 @@ export class IncidentsService {
       telemetry = JSON.parse(row.telemetry_json || '[]');
     } catch (e) {}
 
+    let deviceHealth = null;
+    if (row.device_health_json) {
+      try {
+        deviceHealth = JSON.parse(row.device_health_json);
+      } catch {}
+    }
+
     return {
       ...row,
       telemetry,
+      device_health: deviceHealth,
     };
   }
 

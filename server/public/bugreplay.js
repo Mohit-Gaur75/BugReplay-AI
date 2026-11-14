@@ -122,6 +122,68 @@
     return data;
   }
 
+  // =========================================================================
+  // 2.5 Device & Network Health Telemetry Monitor
+  // =========================================================================
+  function getDeviceAndNetworkHealth() {
+    if (typeof window === 'undefined') return null;
+
+    const nav = typeof navigator !== 'undefined' ? navigator : {};
+    const win = typeof window !== 'undefined' ? window : {};
+    const screen = win.screen || {};
+
+    // 1. Network Health Signals
+    let network = null;
+    const conn = nav.connection || nav.mozConnection || nav.webkitConnection;
+    if (conn || 'onLine' in nav) {
+      network = {
+        online: typeof nav.onLine === 'boolean' ? nav.onLine : true,
+        effectiveType: conn?.effectiveType || (nav.onLine === false ? 'offline' : 'unknown'),
+        downlink: typeof conn?.downlink === 'number' ? conn.downlink : null,
+        rtt: typeof conn?.rtt === 'number' ? conn.rtt : null,
+        saveData: !!conn?.saveData,
+      };
+    }
+
+    // 2. Device Hardware & Display Signals
+    const device = {
+      memoryGb: typeof nav.deviceMemory === 'number' ? nav.deviceMemory : null,
+      cores: typeof nav.hardwareConcurrency === 'number' ? nav.hardwareConcurrency : null,
+      dpr: typeof win.devicePixelRatio === 'number' ? Math.round(win.devicePixelRatio * 100) / 100 : 1,
+      screenResolution: screen.width && screen.height ? `${screen.width}x${screen.height}` : null,
+      colorScheme: win.matchMedia && win.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
+      reducedMotion: win.matchMedia && win.matchMedia('(prefers-reduced-motion: reduce)').matches ? true : false,
+      orientation: screen.orientation?.type || (win.innerHeight > win.innerWidth ? 'portrait' : 'landscape'),
+    };
+
+    // 3. Battery Snapshot (cached from async listener)
+    const battery = win.__BUGREPLAY_BATTERY__ || null;
+
+    return {
+      network,
+      device,
+      battery,
+    };
+  }
+
+  // Pre-fetch battery status if API is supported
+  if (typeof navigator !== 'undefined' && typeof navigator.getBattery === 'function') {
+    try {
+      navigator.getBattery().then((b) => {
+        window.__BUGREPLAY_BATTERY__ = {
+          level: Math.round(b.level * 100),
+          charging: !!b.charging,
+        };
+        b.addEventListener('levelchange', () => {
+          if (window.__BUGREPLAY_BATTERY__) window.__BUGREPLAY_BATTERY__.level = Math.round(b.level * 100);
+        });
+        b.addEventListener('chargingchange', () => {
+          if (window.__BUGREPLAY_BATTERY__) window.__BUGREPLAY_BATTERY__.charging = !!b.charging;
+        });
+      }).catch(() => {});
+    } catch (e) {}
+  }
+
   function getSafeSelector(el) {
     if (!el || el.nodeType !== Node.ELEMENT_NODE) return '';
 
@@ -479,6 +541,7 @@
         pageUrl: window.location.href,
         userAgent: navigator.userAgent,
         viewport: `${window.innerWidth}x${window.innerHeight}`,
+        deviceHealth: getDeviceAndNetworkHealth(),
         telemetry,
       };
 
@@ -587,6 +650,14 @@
 
   // Export RingBuffer and security helpers for testing
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { BugReplayClient, RingBuffer, scrubText, scrubUrl, isSensitiveElement, scrubPayload };
+    module.exports = {
+      BugReplayClient,
+      RingBuffer,
+      scrubText,
+      scrubUrl,
+      isSensitiveElement,
+      scrubPayload,
+      getDeviceAndNetworkHealth,
+    };
   }
 })(typeof window !== 'undefined' ? window : globalThis, typeof document !== 'undefined' ? document : {});

@@ -12,5 +12,6 @@ export const ingestPayloadSchema = z.object({
   pageUrl: z.string().min(1, 'pageUrl is required').max(2000),
   userAgent: z.string().optional().default(''),
   viewport: z.string().optional().default('1440x900'),
+  deviceHealth: z.any().optional().nullable(),
   telemetry: z.array(telemetryEventSchema).optional().default([]),
 });
