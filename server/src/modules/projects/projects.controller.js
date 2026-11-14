@@ -1,5 +1,6 @@
 import { ProjectsService } from './projects.service.js';
 import { TeamsService } from './teams.service.js';
+import { AuditService } from '../../services/audit.service.js';
 import { createProjectSchema, updateProjectSchema } from './projects.validation.js';
 import { successResponse } from '../../utils/response.js';
 
@@ -109,6 +110,57 @@ export class ProjectsController {
     try {
       const result = TeamsService.revokeInvitation(req.user.id, req.params.id, req.params.invitationId);
       return successResponse(res, result, result.message, 200);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  // Enterprise Audit Logs
+  static getAuditLogs(req, res, next) {
+    try {
+      const options = {
+        action: req.query.action,
+        search: req.query.search,
+        startDate: req.query.startDate,
+        endDate: req.query.endDate,
+        page: req.query.page,
+        limit: req.query.limit,
+      };
+      const result = AuditService.listLogs(req.user.id, req.params.id, options);
+      return successResponse(res, result, 'Audit logs retrieved successfully', 200);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static exportAuditLogs(req, res, next) {
+    try {
+      const format = (req.query.format || 'csv').toLowerCase();
+      const options = {
+        action: req.query.action,
+        startDate: req.query.startDate,
+        endDate: req.query.endDate,
+      };
+      const result = AuditService.exportLogs(req.user.id, req.params.id, format, options);
+
+      if (format === 'json') {
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
+        return res.status(200).json(result.data);
+      }
+
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
+      return res.status(200).send(result.data);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static getAuditActions(req, res, next) {
+    try {
+      const actions = AuditService.getDistinctActions(req.user.id, req.params.id);
+      return successResponse(res, { actions }, 'Audit actions retrieved successfully', 200);
     } catch (err) {
       next(err);
     }

@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { getDb } from '../../db/db.js';
 import { ROLES, ROLE_RANKS, getProjectRole } from '../../middleware/rbac.js';
+import { AuditService, AUDIT_ACTIONS } from '../../services/audit.service.js';
 
 export class TeamsService {
   /**
@@ -123,6 +124,17 @@ export class TeamsService {
         VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
       `).run(memberId, projectId, existingUser.id, upperRole, inviterUserId);
 
+      // Enterprise Audit Log
+      AuditService.record({
+        projectId,
+        actorId: inviterUserId,
+        action: AUDIT_ACTIONS.MEMBER_INVITED,
+        targetType: 'MEMBER',
+        targetId: existingUser.id,
+        targetName: normalizedEmail,
+        details: { role: upperRole, method: 'DIRECT_ADD' },
+      });
+
       return {
         type: 'DIRECT_ADD',
         member: {
@@ -146,6 +158,17 @@ export class TeamsService {
       INSERT INTO project_invitations (id, project_id, email, role, token, invited_by, status, created_at, expires_at)
       VALUES (?, ?, ?, ?, ?, ?, 'PENDING', CURRENT_TIMESTAMP, ?)
     `).run(inviteId, projectId, normalizedEmail, upperRole, token, inviterUserId, expiresAt);
+
+    // Enterprise Audit Log
+    AuditService.record({
+      projectId,
+      actorId: inviterUserId,
+      action: AUDIT_ACTIONS.MEMBER_INVITED,
+      targetType: 'INVITATION',
+      targetId: inviteId,
+      targetName: normalizedEmail,
+      details: { role: upperRole, method: 'PENDING_INVITE', expiresAt },
+    });
 
     return {
       type: 'INVITATION_SENT',
@@ -222,6 +245,17 @@ export class TeamsService {
       WHERE project_id = ? AND user_id = ?
     `).run(upperRole, projectId, targetUserId);
 
+    // Enterprise Audit Log
+    AuditService.record({
+      projectId,
+      actorId: actorUserId,
+      action: AUDIT_ACTIONS.MEMBER_ROLE_CHANGED,
+      targetType: 'MEMBER',
+      targetId: targetUserId,
+      targetName: targetMember.email,
+      details: { oldRole: targetMember.role, newRole: upperRole },
+    });
+
     return {
       projectId,
       userId: targetUserId,
@@ -292,6 +326,17 @@ export class TeamsService {
       WHERE project_id = ? AND user_id = ?
     `).run(projectId, targetUserId);
 
+    // Enterprise Audit Log
+    AuditService.record({
+      projectId,
+      actorId: actorUserId,
+      action: AUDIT_ACTIONS.MEMBER_REMOVED,
+      targetType: 'MEMBER',
+      targetId: targetUserId,
+      targetName: targetMember.email,
+      details: { previousRole: targetMember.role, isSelfRemoval: actorUserId === targetUserId },
+    });
+
     return {
       projectId,
       userId: targetUserId,
@@ -315,6 +360,11 @@ export class TeamsService {
     }
 
     const db = getDb();
+    const invRow = db.prepare(`
+      SELECT email, role FROM project_invitations 
+      WHERE id = ? AND project_id = ? AND status = 'PENDING'
+    `).get(invitationId, projectId);
+
     const result = db.prepare(`
       UPDATE project_invitations 
       SET status = 'REVOKED'
@@ -328,6 +378,17 @@ export class TeamsService {
       error.isOperational = true;
       throw error;
     }
+
+    // Enterprise Audit Log
+    AuditService.record({
+      projectId,
+      actorId: actorUserId,
+      action: AUDIT_ACTIONS.INVITATION_REVOKED,
+      targetType: 'INVITATION',
+      targetId: invitationId,
+      targetName: invRow?.email,
+      details: { role: invRow?.role },
+    });
 
     return {
       invitationId,

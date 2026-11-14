@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { getDb } from '../../db/db.js';
 import { TestRunnerService } from '../../services/testRunner.service.js';
+import { AuditService, AUDIT_ACTIONS } from '../../services/audit.service.js';
 
 export class IncidentsService {
   static listIncidents(userId, { projectId, status, search, page = 1, limit = 20 }) {
@@ -134,6 +135,17 @@ export class IncidentsService {
     const db = getDb();
     db.prepare('UPDATE incidents SET status = ? WHERE id = ?').run(upperStatus, incidentId);
 
+    // Enterprise Audit Log
+    AuditService.record({
+      projectId: incident.project_id,
+      actorId: userId,
+      action: AUDIT_ACTIONS.INCIDENT_STATUS_CHANGED,
+      targetType: 'INCIDENT',
+      targetId: incidentId,
+      targetName: incident.error_message || `Incident #${incidentId.slice(0, 8)}`,
+      details: { oldStatus: incident.status, newStatus: upperStatus },
+    });
+
     return this.getIncidentById(userId, incidentId);
   }
 
@@ -173,6 +185,16 @@ export class IncidentsService {
 
     const db = getDb();
     db.prepare('DELETE FROM incidents WHERE id = ?').run(incidentId);
+
+    // Enterprise Audit Log
+    AuditService.record({
+      projectId: incident.project_id,
+      actorId: userId,
+      action: AUDIT_ACTIONS.INCIDENT_DELETED,
+      targetType: 'INCIDENT',
+      targetId: incidentId,
+      targetName: incident.error_message || `Incident #${incidentId.slice(0, 8)}`,
+    });
 
     return { id: incidentId, deleted: true };
   }
@@ -233,7 +255,7 @@ export class IncidentsService {
 
     // If test environment or mock token, return immediate mock response
     if (process.env.NODE_ENV === 'test' || targetToken.startsWith('ghp_mock') || targetRepo.includes('mock-repo')) {
-      return {
+      const mockResult = {
         success: true,
         pullRequestUrl: `https://github.com/${owner}/${repoName}/pull/101`,
         pullRequestNumber: 101,
@@ -242,6 +264,18 @@ export class IncidentsService {
         repo: targetRepo,
         message: 'Pull request generated and opened successfully on GitHub.',
       };
+
+      AuditService.record({
+        projectId: incident.project_id,
+        actorId: userId,
+        action: AUDIT_ACTIONS.PR_CREATED,
+        targetType: 'INCIDENT',
+        targetId: incidentId,
+        targetName: `PR #101 (${targetRepo})`,
+        details: { repo: targetRepo, pullRequestUrl: mockResult.pullRequestUrl, branch: branchName },
+      });
+
+      return mockResult;
     }
 
     const headers = {
@@ -336,7 +370,7 @@ npx playwright test ${testPath} --headed
       }
 
       const prData = await prRes.json();
-      return {
+      const prResult = {
         success: true,
         pullRequestUrl: prData.html_url,
         pullRequestNumber: prData.number,
@@ -345,6 +379,18 @@ npx playwright test ${testPath} --headed
         repo: targetRepo,
         message: 'Pull request generated and opened successfully on GitHub.',
       };
+
+      AuditService.record({
+        projectId: incident.project_id,
+        actorId: userId,
+        action: AUDIT_ACTIONS.PR_CREATED,
+        targetType: 'INCIDENT',
+        targetId: incidentId,
+        targetName: `PR #${prData.number} (${targetRepo})`,
+        details: { repo: targetRepo, pullRequestUrl: prData.html_url, branch: branchName },
+      });
+
+      return prResult;
     } catch (err) {
       const error = new Error(`GitHub integration failed: ${err.message}`);
       error.statusCode = 502;
@@ -373,7 +419,19 @@ npx playwright test ${testPath} --headed
       throw error;
     }
 
-    return await TestRunnerService.executeTest(incidentId, options);
+    const testResult = await TestRunnerService.executeTest(incidentId, options);
+
+    AuditService.record({
+      projectId: incident.project_id,
+      actorId: userId,
+      action: AUDIT_ACTIONS.TEST_RUN_DISPATCHED,
+      targetType: 'INCIDENT',
+      targetId: incidentId,
+      targetName: incident.error_message || `Incident #${incidentId.slice(0, 8)}`,
+      details: { status: testResult.status, durationMs: testResult.durationMs },
+    });
+
+    return testResult;
   }
 
   static getTestRuns(userId, incidentId) {

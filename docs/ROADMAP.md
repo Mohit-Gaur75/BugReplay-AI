@@ -52,13 +52,21 @@ The current implementation encompasses:
 - [x] **Interactive Dashboard Execution Console:** Real-time "Run Test in Cloud" button, animated execution spinners, verification badges, collapsible macOS-style dark terminal viewer with stdout/stderr, and historical runs selector.
 - [x] **Real-Time SSE Sync:** Broadcasts `test_run.started` and `test_run.completed` to auto-refresh incident details and dashboard verification badges without page reloads.
 
-### v1.6 — Multi-User Team Management & Role-Based Access Control (RBAC) (Current Release)
+### v1.6 — Multi-User Team Management & Role-Based Access Control (RBAC) (Released)
 - [x] **Hierarchical RBAC Engine & Middleware:** 4-tier permission hierarchy (`OWNER` > `ADMIN` > `MEMBER` > `VIEWER`) with rank validation and route-level authorization via `requireProjectRole(minRole)`.
 - [x] **Team Database Schema Migration (`006_team_management_rbac`):** Creates indexed `project_members` and `project_invitations` tables, auto-backfilling existing projects to assign creators as `OWNER`.
 - [x] **Dual Invitation & Auto-Claim Architecture (`TeamsService`):** Instant project enrollment for existing users and cryptographic token-based invitations for pending users, automatically claimed upon user registration.
 - [x] **Incident & Operation Permission Guards:** Restricts destructive actions (`deleteProject`, `rotateKey`) to `OWNER`/`ADMIN`, enforces incident triaging and test execution guards against read-only `VIEWER` seats.
 - [x] **Full-Featured Team Management UI:** Interactive Team & RBAC modal on Projects dashboard with role badges (`OWNER`, `ADMIN`, `MEMBER`, `VIEWER`), email invitation dispatch, dynamic role promotion/demotion, member removal, pending invitation revocation, and role permission capability guide.
-- [x] **100% Automated Monorepo Coverage:** 11 dedicated team management tests in `teams.test.js` bringing total monorepo test coverage to 89 passing automated tests.
+- [x] **100% Automated Monorepo Coverage:** 11 dedicated team management tests in `teams.test.js`.
+
+### v1.7 — Enterprise Audit Logs & Compliance Trail (Current Release)
+- [x] **Immutable Security Audit Store (`007_enterprise_audit_logs`):** Indexed audit logging table storing actor metadata, action types, target entity references, IP addresses, client user agents, and serialized metadata diffs.
+- [x] **Comprehensive Event Instrumentation (`AuditService`):** Automatic fail-safe audit capture for all critical platform events: `PROJECT_CREATED`, `PROJECT_UPDATED`, `API_KEY_ROTATED`, `MEMBER_INVITED`, `MEMBER_ROLE_CHANGED`, `MEMBER_REMOVED`, `INVITATION_REVOKED`, `INCIDENT_STATUS_CHANGED`, `INCIDENT_DELETED`, `TEST_RUN_DISPATCHED`, and `PR_CREATED`.
+- [x] **SOC 2 & ISO 27001 Compliance Exports:** Dedicated export engine supporting both RFC-4180 compliant CSV downloads and structured JSON export endpoints (`GET /api/v1/projects/:id/audit-logs/export`).
+- [x] **Dynamic Querying & Action Discovery:** Paginated querying with action filtering, keyword search, date bounds, and distinct action type discovery (`GET /api/v1/projects/:id/audit-logs/actions`).
+- [x] **Enterprise Audit Console UI:** Sleek modal on Projects dashboard with real-time event feed, colored action badges, actor role tags, IP network details, expandable syntax-highlighted JSON diff inspector, and 1-click CSV/JSON export.
+- [x] **100-Test Monorepo Milestone:** 11 dedicated audit log integration tests in `server/tests/audit.test.js` bringing total passing tests across the monorepo to 100/100 tests.
 
 ---
 

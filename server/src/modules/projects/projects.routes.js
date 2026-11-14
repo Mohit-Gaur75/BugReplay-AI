@@ -22,4 +22,9 @@ router.patch('/:id/members/:memberId', ProjectsController.updateMemberRole);
 router.delete('/:id/members/:memberId', ProjectsController.removeMember);
 router.delete('/:id/invitations/:invitationId', ProjectsController.revokeInvitation);
 
+// Enterprise Audit Logs & Compliance Trail
+router.get('/:id/audit-logs', ProjectsController.getAuditLogs);
+router.get('/:id/audit-logs/export', ProjectsController.exportAuditLogs);
+router.get('/:id/audit-logs/actions', ProjectsController.getAuditActions);
+
 export default router;

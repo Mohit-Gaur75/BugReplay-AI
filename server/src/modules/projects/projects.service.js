@@ -3,6 +3,7 @@ import { getDb } from '../../db/db.js';
 import { generateApiKey, hashApiKey } from '../../utils/crypto.js';
 import { WebhookNotifier } from '../../services/webhookNotifier.js';
 import { ROLES, ROLE_RANKS, getProjectRole } from '../../middleware/rbac.js';
+import { AuditService, AUDIT_ACTIONS } from '../../services/audit.service.js';
 
 const PLAN_PROJECT_LIMITS = {
   FREE: 1,
@@ -44,6 +45,16 @@ export class ProjectsService {
     });
 
     insertTx();
+
+    AuditService.record({
+      projectId,
+      actorId: userId,
+      action: 'PROJECT_CREATED',
+      targetType: 'PROJECT',
+      targetId: projectId,
+      targetName: name,
+      details: { allowed_domains, has_webhook: !!webhook_url, has_github: !!github_repo },
+    });
 
     // Return raw key once to developer
     return {
@@ -163,9 +174,21 @@ export class ProjectsService {
       values.push(github_token || null);
     }
 
+    const existing = db.prepare('SELECT id, name FROM projects WHERE id = ?').get(projectId);
+
     if (updates.length > 0) {
       values.push(projectId);
       db.prepare(`UPDATE projects SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+
+      AuditService.record({
+        projectId,
+        actorId: userId,
+        action: AUDIT_ACTIONS.PROJECT_UPDATED,
+        targetType: 'PROJECT',
+        targetId: projectId,
+        targetName: existing?.name,
+        details: { updatedFields: updates.map((u) => u.split(' =')[0]) },
+      });
     }
 
     return this.getProjectById(userId, projectId);
@@ -222,11 +245,16 @@ export class ProjectsService {
         WHERE id = ?
       `).run(newApiKeyHash, newApiKeyPrefix, projectId);
 
-      // Audit log
-      db.prepare(`
-        INSERT INTO audit_logs (id, user_id, action, details)
-        VALUES (?, ?, 'API_KEY_ROTATED', ?)
-      `).run(crypto.randomUUID(), userId, JSON.stringify({ projectId, projectName: existing?.name }));
+      // Enterprise Audit Log
+      AuditService.record({
+        projectId,
+        actorId: userId,
+        action: AUDIT_ACTIONS.API_KEY_ROTATED,
+        targetType: 'PROJECT',
+        targetId: projectId,
+        targetName: existing?.name,
+        details: { newKeyPrefix: newApiKeyPrefix },
+      });
     });
 
     rotateTx();
@@ -253,13 +281,17 @@ export class ProjectsService {
     const existing = db.prepare('SELECT id, name FROM projects WHERE id = ?').get(projectId);
 
     const deleteTx = db.transaction(() => {
-      db.prepare('DELETE FROM projects WHERE id = ?').run(projectId);
+      // Enterprise Audit Log
+      AuditService.record({
+        projectId,
+        actorId: userId,
+        action: 'PROJECT_DELETED',
+        targetType: 'PROJECT',
+        targetId: projectId,
+        targetName: existing?.name,
+      });
 
-      // Audit log
-      db.prepare(`
-        INSERT INTO audit_logs (id, user_id, action, details)
-        VALUES (?, ?, 'PROJECT_DELETED', ?)
-      `).run(crypto.randomUUID(), userId, JSON.stringify({ projectId, projectName: existing?.name }));
+      db.prepare('DELETE FROM projects WHERE id = ?').run(projectId);
     });
 
     deleteTx();

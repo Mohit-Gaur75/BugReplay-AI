@@ -22,7 +22,13 @@ import {
   X,
   Crown,
   Mail,
-  Clock
+  Clock,
+  History,
+  Download,
+  Search,
+  FileText,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 
 export default function Projects() {
@@ -39,6 +45,18 @@ export default function Projects() {
   const [inviteRole, setInviteRole] = useState('MEMBER');
   const [inviting, setInviting] = useState(false);
   const [teamFeedback, setTeamFeedback] = useState(null);
+
+  // Enterprise Audit Logs Modal State
+  const [auditModalProject, setAuditModalProject] = useState(null);
+  const [auditLogs, setAuditLogs] = useState([]);
+  const [auditPagination, setAuditPagination] = useState({ total: 0, page: 1, limit: 12, totalPages: 1 });
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [auditFilterAction, setAuditFilterAction] = useState('ALL');
+  const [auditSearch, setAuditSearch] = useState('');
+  const [auditActionsList, setAuditActionsList] = useState([]);
+  const [expandedLogId, setExpandedLogId] = useState(null);
+  const [exportingAudit, setExportingAudit] = useState(null);
+  const [auditError, setAuditError] = useState(null);
 
   // Create Project State
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -253,6 +271,90 @@ export default function Projects() {
     }
   };
 
+  // Audit Logs Handlers
+  const openAuditModal = (project) => {
+    setAuditModalProject(project);
+    setAuditFilterAction('ALL');
+    setAuditSearch('');
+    setExpandedLogId(null);
+    setAuditError(null);
+    fetchAuditActions(project.id);
+    fetchAuditLogs(project.id, 1, 'ALL', '');
+  };
+
+  const fetchAuditActions = async (projectId) => {
+    try {
+      const res = await api.get(`/projects/${projectId}/audit-logs/actions`);
+      setAuditActionsList(res.data?.actions || []);
+    } catch {
+      setAuditActionsList([]);
+    }
+  };
+
+  const fetchAuditLogs = async (projectId, page = 1, action = 'ALL', search = '') => {
+    setAuditLoading(true);
+    setAuditError(null);
+    try {
+      const actionParam = action !== 'ALL' ? `&action=${encodeURIComponent(action)}` : '';
+      const searchParam = search.trim() ? `&search=${encodeURIComponent(search.trim())}` : '';
+      const res = await api.get(`/projects/${projectId}/audit-logs?page=${page}&limit=12${actionParam}${searchParam}`);
+      setAuditLogs(res.data?.logs || []);
+      setAuditPagination(res.data?.pagination || { total: 0, page: 1, limit: 12, totalPages: 1 });
+    } catch (err) {
+      setAuditError(err.message || 'Failed to retrieve audit trail');
+    } finally {
+      setAuditLoading(false);
+    }
+  };
+
+  const handleAuditFilterChange = (newAction) => {
+    setAuditFilterAction(newAction);
+    if (auditModalProject) {
+      fetchAuditLogs(auditModalProject.id, 1, newAction, auditSearch);
+    }
+  };
+
+  const handleAuditSearchSubmit = (e) => {
+    e.preventDefault();
+    if (auditModalProject) {
+      fetchAuditLogs(auditModalProject.id, 1, auditFilterAction, auditSearch);
+    }
+  };
+
+  const handleExportAudit = async (format = 'csv') => {
+    if (!auditModalProject) return;
+    setExportingAudit(format);
+    try {
+      const actionParam = auditFilterAction !== 'ALL' ? `&action=${encodeURIComponent(auditFilterAction)}` : '';
+      const endpoint = `/projects/${auditModalProject.id}/audit-logs/export?format=${format}${actionParam}`;
+      const resData = await api.get(endpoint);
+
+      let blob;
+      let extension;
+      if (format === 'json') {
+        const jsonContent = typeof resData === 'string' ? resData : JSON.stringify(resData, null, 2);
+        blob = new Blob([jsonContent], { type: 'application/json' });
+        extension = 'json';
+      } else {
+        blob = new Blob([resData], { type: 'text/csv;charset=utf-8;' });
+        extension = 'csv';
+      }
+
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `audit-trail-${auditModalProject.id.slice(0, 8)}-${Date.now()}.${extension}`);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(`Could not export audit logs: ${err.message}`);
+    } finally {
+      setExportingAudit(null);
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
       {/* Top Header */}
@@ -359,14 +461,26 @@ export default function Projects() {
                   <Users className="w-4 h-4 text-blue-400" />
                   <span className="font-medium">{proj.member_count || 1} Team Member{(proj.member_count || 1) > 1 ? 's' : ''}</span>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => openTeamModal(proj)}
-                  className="flex items-center space-x-1 text-xs text-blue-400 hover:text-blue-300 font-medium transition-colors cursor-pointer"
-                >
-                  <UserPlus className="w-3.5 h-3.5" />
-                  <span>Manage Team</span>
-                </button>
+                <div className="flex items-center space-x-3">
+                  <button
+                    type="button"
+                    onClick={() => openTeamModal(proj)}
+                    className="flex items-center space-x-1 text-xs text-blue-400 hover:text-blue-300 font-medium transition-colors cursor-pointer"
+                  >
+                    <UserPlus className="w-3.5 h-3.5" />
+                    <span>Team</span>
+                  </button>
+                  {proj.user_role !== 'VIEWER' && (
+                    <button
+                      type="button"
+                      onClick={() => openAuditModal(proj)}
+                      className="flex items-center space-x-1 text-xs text-purple-400 hover:text-purple-300 font-medium transition-colors cursor-pointer"
+                    >
+                      <History className="w-3.5 h-3.5" />
+                      <span>Audit Logs</span>
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Usage & Incidents Stats */}
@@ -889,6 +1003,239 @@ export default function Projects() {
               >
                 Close
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Enterprise Audit Trail & Compliance Log */}
+      {auditModalProject && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-surface border border-border rounded-xl p-6 max-w-4xl w-full shadow-2xl relative my-8 flex flex-col max-h-[90vh]">
+            {/* Modal Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border-subtle pb-4 mb-4">
+              <div className="flex items-center space-x-3">
+                <div className="p-2.5 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-400">
+                  <History className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center space-x-2">
+                    <span>Enterprise Audit Trail</span>
+                    <span className="text-xs text-zinc-400 font-normal">({auditModalProject.name})</span>
+                  </h3>
+                  <p className="text-xs text-zinc-400 mt-0.5">
+                    Immutable activity log for SOC 2 Type II, ISO 27001, and compliance auditing.
+                  </p>
+                </div>
+              </div>
+
+              {/* Header Actions & Close */}
+              <div className="flex items-center space-x-2 self-end sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => handleExportAudit('csv')}
+                  disabled={exportingAudit === 'csv'}
+                  className="px-3 py-1.5 rounded-lg bg-surface-elevated hover:bg-zinc-700 border border-border text-xs font-medium text-zinc-200 hover:text-white flex items-center space-x-1.5 transition-colors disabled:opacity-50"
+                  title="Export audit logs as CSV"
+                >
+                  <Download className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>{exportingAudit === 'csv' ? 'Exporting...' : 'Export CSV'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleExportAudit('json')}
+                  disabled={exportingAudit === 'json'}
+                  className="px-3 py-1.5 rounded-lg bg-surface-elevated hover:bg-zinc-700 border border-border text-xs font-medium text-zinc-200 hover:text-white flex items-center space-x-1.5 transition-colors disabled:opacity-50"
+                  title="Export audit logs as JSON"
+                >
+                  <FileText className="w-3.5 h-3.5 text-blue-400" />
+                  <span>{exportingAudit === 'json' ? 'Exporting...' : 'Export JSON'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAuditModalProject(null)}
+                  className="p-1.5 rounded-lg hover:bg-surface-elevated text-zinc-400 hover:text-white transition-colors ml-1"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Filters & Search Toolbar */}
+            <div className="flex flex-col sm:flex-row gap-3 mb-4">
+              <form onSubmit={handleAuditSearchSubmit} className="relative flex-1">
+                <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-2.5" />
+                <input
+                  type="text"
+                  placeholder="Search by actor email, target, or details..."
+                  value={auditSearch}
+                  onChange={(e) => setAuditSearch(e.target.value)}
+                  className="w-full pl-8 pr-3 py-1.5 bg-background border border-border rounded-lg text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-purple-500"
+                />
+              </form>
+
+              <div className="flex items-center space-x-2">
+                <div className="relative">
+                  <select
+                    value={auditFilterAction}
+                    onChange={(e) => handleAuditFilterChange(e.target.value)}
+                    className="px-3 py-1.5 bg-background border border-border rounded-lg text-xs text-white focus:outline-none focus:border-purple-500 cursor-pointer"
+                  >
+                    <option value="ALL">All Actions</option>
+                    {auditActionsList.map((action) => (
+                      <option key={action} value={action}>
+                        {action}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => fetchAuditLogs(auditModalProject.id, 1, auditFilterAction, auditSearch)}
+                  className="p-1.5 rounded-lg bg-surface-elevated border border-border text-zinc-400 hover:text-white transition-colors"
+                  title="Refresh logs"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${auditLoading ? 'animate-spin' : ''}`} />
+                </button>
+              </div>
+            </div>
+
+            {/* Error Message */}
+            {auditError && (
+              <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-xs flex items-center space-x-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{auditError}</span>
+              </div>
+            )}
+
+            {/* Audit Logs Table / Feed */}
+            <div className="flex-1 overflow-y-auto border border-border-subtle rounded-lg bg-background divide-y divide-border-subtle min-h-[300px]">
+              {auditLoading ? (
+                <div className="py-16 text-center text-xs text-zinc-400 flex flex-col items-center space-y-2">
+                  <RefreshCw className="w-5 h-5 animate-spin text-purple-400" />
+                  <span>Loading audit trail...</span>
+                </div>
+              ) : auditLogs.length === 0 ? (
+                <div className="py-16 text-center text-xs text-zinc-500 flex flex-col items-center space-y-2">
+                  <FileText className="w-8 h-8 text-zinc-600" />
+                  <span>No audit events match your filter criteria.</span>
+                </div>
+              ) : (
+                auditLogs.map((log) => {
+                  const isDestructive = ['API_KEY_ROTATED', 'MEMBER_REMOVED', 'INCIDENT_DELETED', 'PROJECT_DELETED'].includes(log.action);
+                  const isSuccess = ['PR_CREATED', 'INCIDENT_STATUS_CHANGED'].includes(log.action);
+                  const isMembership = ['MEMBER_INVITED', 'MEMBER_ROLE_CHANGED', 'INVITATION_REVOKED'].includes(log.action);
+                  const isExpanded = expandedLogId === log.id;
+
+                  return (
+                    <div key={log.id} className="p-3 hover:bg-surface-elevated/20 transition-colors text-xs space-y-1.5">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        {/* Action Badge & Timestamp */}
+                        <div className="flex items-center space-x-2.5 flex-wrap">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border ${
+                            isDestructive
+                              ? 'bg-red-500/10 border-red-500/30 text-red-400'
+                              : isSuccess
+                              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                              : isMembership
+                              ? 'bg-blue-500/10 border-blue-500/30 text-blue-400'
+                              : 'bg-amber-500/10 border-amber-500/30 text-amber-400'
+                          }`}>
+                            {log.action}
+                          </span>
+
+                          <span className="text-[11px] text-zinc-400 flex items-center space-x-1">
+                            <Clock className="w-3 h-3 text-zinc-500 inline" />
+                            <span>{new Date(log.created_at).toLocaleString()}</span>
+                          </span>
+                        </div>
+
+                        {/* Actor Info */}
+                        <div className="flex items-center space-x-2 text-[11px]">
+                          <span className="text-zinc-300 font-medium">{log.actor_email || 'System'}</span>
+                          {log.actor_role && (
+                            <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-zinc-800 text-zinc-400 border border-zinc-700">
+                              {log.actor_role}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Target & Network Details */}
+                      <div className="flex items-center justify-between text-[11px] text-zinc-400">
+                        <div className="flex items-center space-x-2 truncate">
+                          {log.target_type && (
+                            <span className="text-zinc-500 font-mono text-[10px] uppercase">[{log.target_type}]</span>
+                          )}
+                          <span className="text-zinc-200 font-medium truncate">{log.target_name || log.target_id || 'Project'}</span>
+                        </div>
+
+                        <div className="flex items-center space-x-3 shrink-0 text-zinc-500 font-mono text-[10px]">
+                          <span>IP: {log.ip_address || '127.0.0.1'}</span>
+                          {log.details && (
+                            <button
+                              type="button"
+                              onClick={() => setExpandedLogId(isExpanded ? null : log.id)}
+                              className="text-purple-400 hover:text-purple-300 font-sans text-xs underline cursor-pointer"
+                            >
+                              {isExpanded ? 'Hide Details' : 'View Details'}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Expandable JSON Details Viewer */}
+                      {isExpanded && log.details && (
+                        <div className="mt-2 p-2.5 rounded bg-surface border border-border font-mono text-[11px] text-purple-300 overflow-x-auto select-all">
+                          <pre className="m-0 whitespace-pre-wrap">
+                            {typeof log.details === 'object'
+                              ? JSON.stringify(log.details, null, 2)
+                              : log.details}
+                          </pre>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Pagination Controls */}
+            <div className="flex items-center justify-between pt-4 mt-2 border-t border-border-subtle text-xs text-zinc-400">
+              <span>
+                Showing <strong className="text-white">{auditLogs.length}</strong> of{' '}
+                <strong className="text-white">{auditPagination.total}</strong> events
+              </span>
+
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  disabled={auditPagination.page <= 1 || auditLoading}
+                  onClick={() =>
+                    fetchAuditLogs(auditModalProject.id, auditPagination.page - 1, auditFilterAction, auditSearch)
+                  }
+                  className="px-2.5 py-1 rounded bg-surface-elevated border border-border text-zinc-300 hover:text-white disabled:opacity-40 flex items-center space-x-1"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                  <span>Previous</span>
+                </button>
+
+                <span className="text-zinc-400 px-1 font-mono text-[11px]">
+                  {auditPagination.page} / {auditPagination.totalPages || 1}
+                </span>
+
+                <button
+                  type="button"
+                  disabled={auditPagination.page >= auditPagination.totalPages || auditLoading}
+                  onClick={() =>
+                    fetchAuditLogs(auditModalProject.id, auditPagination.page + 1, auditFilterAction, auditSearch)
+                  }
+                  className="px-2.5 py-1 rounded bg-surface-elevated border border-border text-zinc-300 hover:text-white disabled:opacity-40 flex items-center space-x-1"
+                >
+                  <span>Next</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
           </div>
         </div>

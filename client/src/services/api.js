@@ -33,7 +33,7 @@ export async function apiRequest(endpoint, options = {}) {
 
   // Handle file downloads
   const contentType = response.headers.get('content-type') || '';
-  if (contentType.includes('application/javascript') || contentType.includes('text/plain')) {
+  if (contentType.includes('application/javascript') || contentType.includes('text/plain') || contentType.includes('text/csv')) {
     if (!response.ok) throw new ApiError('Failed to download file', 'DOWNLOAD_ERROR', response.status);
     return response.text();
   }

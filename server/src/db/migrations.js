@@ -256,6 +256,49 @@ const migrationsList = [
         insertMember.run(crypto.randomUUID(), p.id, p.user_id, p.created_at);
       }
     }
+  },
+  {
+    name: '007_enterprise_audit_logs',
+    up: (db) => {
+      // Safely upgrade audit_logs table with enterprise columns
+      const cols = db.prepare("PRAGMA table_info('audit_logs')").all().map((c) => c.name);
+
+      if (!cols.includes('project_id')) {
+        db.exec(`ALTER TABLE audit_logs ADD COLUMN project_id TEXT DEFAULT NULL;`);
+      }
+      if (!cols.includes('actor_id')) {
+        db.exec(`ALTER TABLE audit_logs ADD COLUMN actor_id TEXT DEFAULT NULL;`);
+      }
+      if (!cols.includes('actor_email')) {
+        db.exec(`ALTER TABLE audit_logs ADD COLUMN actor_email TEXT DEFAULT NULL;`);
+      }
+      if (!cols.includes('actor_role')) {
+        db.exec(`ALTER TABLE audit_logs ADD COLUMN actor_role TEXT DEFAULT NULL;`);
+      }
+      if (!cols.includes('target_type')) {
+        db.exec(`ALTER TABLE audit_logs ADD COLUMN target_type TEXT DEFAULT NULL;`);
+      }
+      if (!cols.includes('target_id')) {
+        db.exec(`ALTER TABLE audit_logs ADD COLUMN target_id TEXT DEFAULT NULL;`);
+      }
+      if (!cols.includes('target_name')) {
+        db.exec(`ALTER TABLE audit_logs ADD COLUMN target_name TEXT DEFAULT NULL;`);
+      }
+      if (!cols.includes('user_agent')) {
+        db.exec(`ALTER TABLE audit_logs ADD COLUMN user_agent TEXT DEFAULT NULL;`);
+      }
+
+      // Backfill actor_id from user_id if present
+      if (cols.includes('user_id')) {
+        db.exec(`UPDATE audit_logs SET actor_id = user_id WHERE actor_id IS NULL AND user_id IS NOT NULL;`);
+      }
+
+      db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_audit_logs_project_created ON audit_logs(project_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action);
+        CREATE INDEX IF NOT EXISTS idx_audit_logs_actor ON audit_logs(actor_id);
+      `);
+    }
   }
 ];
 
