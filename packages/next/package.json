@@ -1,0 +1,36 @@
+{
+  "name": "@bugreplay/next",
+  "version": "1.0.0",
+  "description": "Official Next.js SDK for BugReplay AI — App Router error capture, layout script, and API route wrappers",
+  "type": "module",
+  "main": "src/index.js",
+  "types": "types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./types/index.d.ts",
+      "import": "./src/index.js",
+      "default": "./src/index.js"
+    }
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "keywords": [
+    "bugreplay",
+    "nextjs",
+    "next",
+    "app-router",
+    "playwright",
+    "debugging"
+  ],
+  "author": "BugReplay AI Team",
+  "license": "MIT",
+  "peerDependencies": {
+    "next": ">=13.0.0",
+    "react": ">=18.0.0"
+  },
+  "dependencies": {
+    "@bugreplay/sdk": "*",
+    "@bugreplay/react": "*"
+  }
+}

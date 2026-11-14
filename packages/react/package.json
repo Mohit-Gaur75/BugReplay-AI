@@ -1,0 +1,34 @@
+{
+  "name": "@bugreplay/react",
+  "version": "1.0.0",
+  "description": "Official React SDK for BugReplay AI — ErrorBoundary, hooks, and component breadcrumbs",
+  "type": "module",
+  "main": "src/index.js",
+  "types": "types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./types/index.d.ts",
+      "import": "./src/index.js",
+      "default": "./src/index.js"
+    }
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "keywords": [
+    "bugreplay",
+    "react",
+    "error-boundary",
+    "playwright",
+    "debugging"
+  ],
+  "author": "BugReplay AI Team",
+  "license": "MIT",
+  "peerDependencies": {
+    "react": ">=18.0.0",
+    "react-dom": ">=18.0.0"
+  },
+  "dependencies": {
+    "@bugreplay/sdk": "*"
+  }
+}

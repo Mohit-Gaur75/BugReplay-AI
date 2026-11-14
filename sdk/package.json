@@ -4,6 +4,14 @@
   "description": "BugReplay AI - Lightweight zero-dependency in-browser capture SDK",
   "type": "module",
   "main": "src/bugreplay.js",
+  "types": "./types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./types/index.d.ts",
+      "import": "./src/index.js",
+      "default": "./src/bugreplay.js"
+    }
+  },
   "scripts": {
     "build": "node scripts/build.js",
     "test": "node --test"

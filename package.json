@@ -8,7 +8,8 @@
     "server",
     "client",
     "sdk",
-    "cli"
+    "cli",
+    "packages/*"
   ],
   "scripts": {
     "dev": "npm run dev:server",
@@ -17,10 +18,12 @@
     "dev:client": "npm run dev --workspace=client",
     "build": "npm run build --workspace=sdk && npm run build --workspace=client",
     "test": "npm run test:all",
-    "test:all": "npm run test:server && npm run test:sdk && npm run test:cli",
+    "test:all": "npm run test:server && npm run test:sdk && npm run test:cli && npm run test:react && npm run test:next",
     "test:server": "npm run test --workspace=server",
     "test:sdk": "npm run test --workspace=sdk",
     "test:cli": "npm run test --workspace=cli",
+    "test:react": "npm run test --workspace=@bugreplay/react",
+    "test:next": "npm run test --workspace=@bugreplay/next",
     "ci": "npm run build --workspace=sdk && npm run test:all && npm run build --workspace=client",
     "seed": "node scripts/seed.js"
   },

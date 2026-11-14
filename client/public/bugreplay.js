@@ -208,19 +208,27 @@
     }
 
     extractScriptApiKey() {
-      if (document.currentScript) {
+      if (typeof document === 'undefined') return null;
+      if (document.currentScript && typeof document.currentScript.getAttribute === 'function') {
         return document.currentScript.getAttribute('data-api-key');
       }
-      const script = document.querySelector('script[data-api-key]');
-      return script ? script.getAttribute('data-api-key') : null;
+      if (typeof document.querySelector === 'function') {
+        const script = document.querySelector('script[data-api-key]');
+        return script ? script.getAttribute('data-api-key') : null;
+      }
+      return null;
     }
 
     extractScriptEndpoint() {
-      if (document.currentScript) {
+      if (typeof document === 'undefined') return null;
+      if (document.currentScript && typeof document.currentScript.getAttribute === 'function') {
         return document.currentScript.getAttribute('data-endpoint');
       }
-      const script = document.querySelector('script[data-endpoint]');
-      return script ? script.getAttribute('data-endpoint') : null;
+      if (typeof document.querySelector === 'function') {
+        const script = document.querySelector('script[data-endpoint]');
+        return script ? script.getAttribute('data-endpoint') : null;
+      }
+      return null;
     }
 
     extractScriptCaptureBodyUrls() {
@@ -564,15 +572,17 @@
   const instance = new BugReplayClient();
   window.BugReplay = instance;
 
-  // Auto-initialize if script has data-api-key attribute
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
+  // Auto-initialize if running in a browser DOM environment with script tag
+  if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => {
+        const key = instance.extractScriptApiKey();
+        if (key) instance.init({ apiKey: key });
+      });
+    } else {
       const key = instance.extractScriptApiKey();
       if (key) instance.init({ apiKey: key });
-    });
-  } else {
-    const key = instance.extractScriptApiKey();
-    if (key) instance.init({ apiKey: key });
+    }
   }
 
   // Export RingBuffer and security helpers for testing
