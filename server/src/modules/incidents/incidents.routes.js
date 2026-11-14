@@ -7,6 +7,9 @@ const router = Router();
 // Incident retrieval & modification requires user authentication
 router.use(requireAuth);
 
+// Real-time Server-Sent Events stream for incident updates
+router.get('/stream', IncidentsController.stream);
+
 router.get('/', IncidentsController.list);
 router.get('/:id', IncidentsController.getById);
 router.patch('/:id/status', IncidentsController.updateStatus);

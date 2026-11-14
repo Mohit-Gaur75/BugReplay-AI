@@ -1,5 +1,7 @@
 import { env } from '../../config/env.js';
 import { AI_SYSTEM_PROMPT } from './prompts.js';
+import { geminiCircuitBreaker } from '../../services/circuitBreaker.js';
+import { metrics } from '../../services/metrics.service.js';
 
 export class Synthesizer {
   /**
@@ -15,20 +17,29 @@ export class Synthesizer {
       telemetry = [];
     }
 
-    // Try Gemini API if key is configured
+    // Try Gemini API if key is configured and Circuit Breaker is not OPEN
     if (env.GEMINI_API_KEY && env.GEMINI_API_KEY.trim()) {
-      try {
-        const aiResult = await this.synthesizeWithGemini(incident, telemetry);
-        if (aiResult && aiResult.playwrightTest) {
-          return aiResult;
+      if (geminiCircuitBreaker.isOpen()) {
+        console.warn('[Synthesizer] Circuit Breaker OPEN for Gemini API. Diverting directly to heuristic engine.');
+      } else {
+        try {
+          const aiResult = await this.synthesizeWithGemini(incident, telemetry);
+          if (aiResult && aiResult.playwrightTest) {
+            geminiCircuitBreaker.recordSuccess();
+            metrics.recordSynthesis('COMPLETED', 'gemini');
+            return aiResult;
+          }
+        } catch (err) {
+          geminiCircuitBreaker.recordFailure(err);
+          console.warn(`[Synthesizer] Gemini API call failed (${err.message}). Falling back to deterministic rule engine.`);
         }
-      } catch (err) {
-        console.warn(`[Synthesizer] Gemini API call failed (${err.message}). Falling back to deterministic rule engine.`);
       }
     }
 
     // Deterministic Heuristic Fallback
-    return this.synthesizeHeuristic(incident, telemetry);
+    const heuristicResult = this.synthesizeHeuristic(incident, telemetry);
+    metrics.recordSynthesis('COMPLETED', 'heuristic');
+    return heuristicResult;
   }
 
   /**

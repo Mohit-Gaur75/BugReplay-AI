@@ -70,6 +70,37 @@ export default function Dashboard({ onSelectIncident, onGoToDemo, onGoToProjects
     fetchIncidents();
   }, [pagination.page, statusFilter]);
 
+  // Real-Time SSE Stream Integration
+  useEffect(() => {
+    const token = localStorage.getItem('bugreplay_token');
+    if (!token) return;
+
+    let eventSource = null;
+    try {
+      eventSource = new EventSource(`/api/v1/incidents/stream?token=${encodeURIComponent(token)}`);
+
+      eventSource.addEventListener('incident.created', () => {
+        fetchIncidents();
+      });
+
+      eventSource.addEventListener('incident.deduplicated', () => {
+        fetchIncidents();
+      });
+
+      eventSource.addEventListener('synthesis.completed', () => {
+        fetchIncidents();
+      });
+    } catch (e) {
+      console.warn('Could not establish real-time SSE stream:', e);
+    }
+
+    return () => {
+      if (eventSource) {
+        eventSource.close();
+      }
+    };
+  }, []);
+
   const handleSearchSubmit = (e) => {
     e.preventDefault();
     setPagination((prev) => ({ ...prev, page: 1 }));
@@ -130,24 +161,31 @@ export default function Dashboard({ onSelectIncident, onGoToDemo, onGoToProjects
       <div className="bg-surface border border-border rounded-xl shadow-xl overflow-hidden">
         {/* Filter and Search Bar */}
         <div className="p-4 bg-surface-elevated/50 border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          {/* Status Tabs */}
-          <div className="flex items-center space-x-1 overflow-x-auto pb-1 sm:pb-0">
-            {['', 'OPEN', 'INVESTIGATING', 'RESOLVED'].map((status) => (
-              <button
-                key={status}
-                onClick={() => {
-                  setStatusFilter(status);
-                  setPagination((prev) => ({ ...prev, page: 1 }));
-                }}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors shrink-0 ${
-                  statusFilter === status
-                    ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
-                    : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
-                }`}
-              >
-                {status || 'All Incidents'}
-              </button>
-            ))}
+          {/* Status Tabs & Realtime Indicator */}
+          <div className="flex items-center space-x-3 overflow-x-auto pb-1 sm:pb-0">
+            <div className="flex items-center space-x-1">
+              {['', 'OPEN', 'INVESTIGATING', 'RESOLVED'].map((status) => (
+                <button
+                  key={status}
+                  onClick={() => {
+                    setStatusFilter(status);
+                    setPagination((prev) => ({ ...prev, page: 1 }));
+                  }}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors shrink-0 ${
+                    statusFilter === status
+                      ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
+                      : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                  }`}
+                >
+                  {status || 'All Incidents'}
+                </button>
+              ))}
+            </div>
+
+            <div className="hidden md:flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-[10px] font-mono font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span>LIVE SYNC</span>
+            </div>
           </div>
 
           {/* Search Input */}
@@ -230,8 +268,18 @@ export default function Dashboard({ onSelectIncident, onGoToDemo, onGoToProjects
                     </td>
 
                     <td className="py-3 px-4 max-w-md">
-                      <div className="font-semibold text-zinc-100 group-hover:text-blue-400 transition-colors truncate">
-                        {incident.error_message}
+                      <div className="flex items-center space-x-2">
+                        <span className="font-semibold text-zinc-100 group-hover:text-blue-400 transition-colors truncate">
+                          {incident.error_message}
+                        </span>
+                        {(incident.occurrence_count || 1) > 1 && (
+                          <span
+                            className="px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30 flex-shrink-0"
+                            title={`Captured ${incident.occurrence_count} recurring instances`}
+                          >
+                            {incident.occurrence_count}x
+                          </span>
+                        )}
                       </div>
                       <div className="text-[11px] font-mono text-zinc-500 truncate mt-0.5">
                         {incident.page_url}

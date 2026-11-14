@@ -50,6 +50,9 @@ export class IncidentsService {
         i.status,
         i.generation_status,
         i.confidence,
+        i.occurrence_count,
+        i.last_seen_at,
+        i.fingerprint,
         i.created_at
       FROM incidents i
       JOIN projects p ON p.id = i.project_id

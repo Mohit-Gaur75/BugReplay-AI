@@ -1,4 +1,5 @@
 import { IncidentsService } from './incidents.service.js';
+import { sseService } from './sse.service.js';
 import { successResponse, errorResponse } from '../../utils/response.js';
 
 export class IncidentsController {
@@ -73,6 +74,21 @@ export class IncidentsController {
       const { repo, token, baseBranch } = req.body || {};
       const result = await IncidentsService.createGitHubPR(req.user.id, req.params.id, { repo, token, baseBranch });
       return successResponse(res, result, 'GitHub Pull Request created successfully', 201);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static stream(req, res, next) {
+    try {
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      if (typeof res.flushHeaders === 'function') {
+        res.flushHeaders();
+      }
+
+      sseService.addClient(req.user.id, res);
     } catch (err) {
       next(err);
     }

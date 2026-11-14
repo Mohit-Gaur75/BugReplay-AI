@@ -8,6 +8,10 @@ import { env } from './config/env.js';
 import { getDb } from './db/db.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { errorResponse } from './utils/response.js';
+import { requestIdMiddleware } from './middleware/requestId.js';
+import { generalLimiter, authLimiter, ingestLimiter } from './middleware/rateLimiter.js';
+import { metrics } from './services/metrics.service.js';
+import { geminiCircuitBreaker } from './services/circuitBreaker.js';
 import apiRouter from './routes/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -16,15 +20,29 @@ const __dirname = path.dirname(__filename);
 export function createApp() {
   const app = express();
 
-  // Security Headers via Helmet
+  // 1. Distributed Trace & Request ID Tracking
+  app.use(requestIdMiddleware);
+
+  // 2. Metrics & Observability Collector Middleware
+  app.use((req, res, next) => {
+    const start = Date.now();
+    res.on('finish', () => {
+      const durationMs = Date.now() - start;
+      const cleanPath = req.baseUrl || req.path || req.originalUrl?.split('?')[0] || '/';
+      metrics.recordHttpRequest(req.method, cleanPath, res.statusCode, durationMs);
+    });
+    next();
+  });
+
+  // 3. Security Headers via Helmet
   app.use(
     helmet({
       crossOriginResourcePolicy: { policy: 'cross-origin' }, // allow SDK distribution
-      contentSecurityPolicy: false, // will be fine-tuned for dashboard
+      contentSecurityPolicy: false, // fine-tuned for dashboard
     })
   );
 
-  // CORS Configuration
+  // 4. CORS Configuration
   const allowedOrigins = env.CORS_ORIGIN.split(',').map((o) => o.trim());
   app.use(
     cors({
@@ -38,27 +56,36 @@ export function createApp() {
       },
       credentials: true,
       methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key', 'X-Request-Id'],
+      exposedHeaders: ['RateLimit-Limit', 'RateLimit-Remaining', 'RateLimit-Reset', 'X-Request-Id'],
     })
   );
 
-  // Request Logging
+  // 5. Request Logging with Request ID
   if (env.NODE_ENV !== 'test') {
     app.use(morgan(env.NODE_ENV === 'production' ? 'combined' : 'dev'));
   }
 
-  // Request body parsing with strict 100KB limit
+  // 6. Request body parsing with strict 100KB limit
   app.use(express.json({ limit: '100kb' }));
   app.use(express.urlencoded({ extended: true, limit: '100kb' }));
 
-  // Static assets (SDK delivery, demo files)
+  // 7. Static assets (SDK delivery, demo files)
   const publicDir = path.resolve(__dirname, '../public');
   app.use(express.static(publicDir));
 
-  // Mount API v1 Routes
-  app.use('/api/v1', apiRouter);
+  // 8. Prometheus / OpenMetrics Telemetry Endpoint
+  app.get('/metrics', (req, res) => {
+    res.setHeader('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
+    return res.send(metrics.getPrometheusMetrics());
+  });
 
-  // Simulation Endpoints for Sandbox Demo
+  // 9. Rate-Limited API Routes
+  app.use('/api/v1/auth', authLimiter);
+  app.use('/api/v1/ingest', ingestLimiter);
+  app.use('/api/v1', generalLimiter, apiRouter);
+
+  // 10. Simulation Endpoints for Sandbox Demo
   app.post('/api/v1/simulate/checkout-timeout', (req, res) => {
     return res.status(504).json({
       error: 'PaymentGatewayTimeout',
@@ -75,7 +102,54 @@ export function createApp() {
     });
   });
 
-  // Health Check Endpoint
+  // 11. Kubernetes / Cloud Liveness Probe
+  app.get('/health/live', (req, res) => {
+    return res.status(200).json({
+      status: 'alive',
+      uptime: process.uptime(),
+      pid: process.pid,
+    });
+  });
+
+  // 12. Deep Readiness Probe (Database, Worker, Circuit Breaker)
+  app.get('/health/ready', (req, res) => {
+    try {
+      const db = getDb();
+      // Test read & write
+      const testQuery = db.prepare('SELECT 1 as healthy').get();
+      const isDbOk = testQuery && testQuery.healthy === 1;
+
+      // Check pending job count
+      const queueRow = db.prepare("SELECT COUNT(*) as depth FROM jobs WHERE status = 'PENDING'").get();
+      const queueDepth = queueRow ? queueRow.depth : 0;
+
+      const cb = geminiCircuitBreaker.getStatus();
+
+      const isReady = isDbOk && cb.state !== 'OPEN';
+      const statusCode = isReady ? 200 : 503;
+
+      return res.status(statusCode).json({
+        status: isReady ? 'ready' : 'degraded',
+        database: isDbOk ? 'connected' : 'error',
+        queue: {
+          pendingJobs: queueDepth,
+          status: queueDepth > 1000 ? 'backlogged' : 'nominal',
+        },
+        circuitBreaker: cb,
+        memory: process.memoryUsage(),
+        uptime: process.uptime(),
+        timestamp: new Date().toISOString(),
+      });
+    } catch (err) {
+      return res.status(503).json({
+        status: 'not_ready',
+        error: err.message,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  });
+
+  // 13. Backwards-Compatible Health Check Endpoint
   app.get('/health', (req, res) => {
     try {
       const db = getDb();
@@ -96,14 +170,18 @@ export function createApp() {
     }
   });
 
-  // Root Welcome & API Discovery
+  // 14. Root Welcome & API Discovery
   app.get('/', (req, res) => {
     res.json({
       name: 'BugReplay AI API',
       version: '1.0.0',
-      description: 'Turn production bugs into reproducible Playwright tests automatically.',
+      description: 'Production bug flight recorder & Playwright test synthesis engine.',
       docs: '/api/v1/docs',
-      health: '/health',
+      metrics: '/metrics',
+      health: {
+        live: '/health/live',
+        ready: '/health/ready',
+      },
     });
   });
 

@@ -5,8 +5,11 @@ import { getDb } from '../db/db.js';
 
 export function requireAuth(req, res, next) {
   const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    const token = authHeader.split(' ')[1];
+  const token = (authHeader && authHeader.startsWith('Bearer '))
+    ? authHeader.split(' ')[1]
+    : req.query.token;
+
+  if (token) {
     const decoded = verifyToken(token);
 
     if (!decoded || !decoded.id) {

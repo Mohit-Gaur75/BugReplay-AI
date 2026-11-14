@@ -151,6 +151,14 @@ export default function IncidentDetails({ incidentId, onBack }) {
                 <Clock className="w-3 h-3 text-zinc-500" />
                 <span>{new Date(incident.created_at).toLocaleString()}</span>
               </span>
+              {(incident.occurrence_count || 1) > 1 && (
+                <>
+                  <span className="text-zinc-500">•</span>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                    🔥 {incident.occurrence_count} Occurrences
+                  </span>
+                </>
+              )}
             </div>
             <h1 className="text-lg sm:text-xl font-bold text-white tracking-tight mt-1">
               {incident.error_message}

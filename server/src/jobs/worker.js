@@ -1,8 +1,14 @@
+import crypto from 'crypto';
 import { getDb } from '../db/db.js';
 import { Synthesizer } from '../modules/ai/synthesizer.js';
 import { WebhookNotifier } from '../services/webhookNotifier.js';
+import { sseService } from '../modules/incidents/sse.service.js';
+import { metrics } from '../services/metrics.service.js';
 
 let workerInterval = null;
+const WORKER_ID = `worker_${process.pid}_${crypto.randomUUID().slice(0, 8)}`;
+const MAX_CONCURRENT_JOBS = 3;
+let activeJobCount = 0;
 
 export async function processSingleJob(job) {
   const db = getDb();
@@ -12,12 +18,14 @@ export async function processSingleJob(job) {
     payload = JSON.parse(job.payload);
   } catch (e) {
     db.prepare("UPDATE jobs SET status = 'FAILED', error = 'Malformed payload JSON' WHERE id = ?").run(job.id);
+    metrics.recordSynthesis('FAILED', 'unknown');
     return;
   }
 
   const { incidentId } = payload;
   if (!incidentId) {
     db.prepare("UPDATE jobs SET status = 'FAILED', error = 'Missing incidentId in job payload' WHERE id = ?").run(job.id);
+    metrics.recordSynthesis('FAILED', 'unknown');
     return;
   }
 
@@ -25,6 +33,7 @@ export async function processSingleJob(job) {
   const incident = db.prepare('SELECT * FROM incidents WHERE id = ?').get(incidentId);
   if (!incident) {
     db.prepare("UPDATE jobs SET status = 'FAILED', error = 'Incident not found' WHERE id = ?").run(job.id);
+    metrics.recordSynthesis('FAILED', 'unknown');
     return;
   }
 
@@ -53,27 +62,41 @@ export async function processSingleJob(job) {
       db.prepare(`
         UPDATE jobs SET
           status = 'COMPLETED',
-          updated_at = CURRENT_TIMESTAMP
+          updated_at = CURRENT_TIMESTAMP,
+          locked_at = NULL,
+          locked_by = NULL
         WHERE id = ?
       `).run(job.id);
     });
 
     completeTx();
 
-    // Trigger Webhook Notification if project has webhook_url configured
+    // Broadcast real-time synthesis completed event to owner
     try {
-      const proj = db.prepare('SELECT name, webhook_url FROM projects WHERE id = ?').get(incident.project_id);
-      if (proj && proj.webhook_url) {
-        WebhookNotifier.sendIncidentAlert(proj.webhook_url, proj, incident, synthesis).catch(() => {});
+      const proj = db.prepare('SELECT user_id, name, webhook_url FROM projects WHERE id = ?').get(incident.project_id);
+      if (proj) {
+        sseService.broadcastToUser(proj.user_id, 'synthesis.completed', {
+          incidentId,
+          projectId: incident.project_id,
+          projectName: proj.name,
+          confidence: synthesis.confidence,
+          rootCause: synthesis.rootCause,
+        });
+
+        // Trigger Webhook Notification if project has webhook_url configured
+        if (proj.webhook_url) {
+          WebhookNotifier.sendIncidentAlert(proj.webhook_url, proj, incident, synthesis).catch(() => {});
+        }
       }
     } catch (e) {
       // Non-blocking
     }
   } catch (err) {
-    console.error(`[JobWorker] Error processing job ${job.id}:`, err.message);
+    console.error(`[JobWorker:${WORKER_ID}] Error processing job ${job.id}:`, err.message);
 
     const nextRetries = (job.retries || 0) + 1;
     const isExhausted = nextRetries >= 3;
+    const backoffSeconds = Math.pow(2, nextRetries) * 5; // 10s, 20s, 40s
 
     db.transaction(() => {
       if (isExhausted) {
@@ -82,52 +105,80 @@ export async function processSingleJob(job) {
             status = 'FAILED',
             retries = ?,
             error = ?,
+            locked_at = NULL,
+            locked_by = NULL,
             updated_at = CURRENT_TIMESTAMP
           WHERE id = ?
         `).run(nextRetries, err.message, job.id);
 
         db.prepare("UPDATE incidents SET generation_status = 'FAILED' WHERE id = ?").run(incidentId);
+        metrics.recordSynthesis('FAILED', 'unknown');
       } else {
         db.prepare(`
           UPDATE jobs SET
             status = 'PENDING',
             retries = ?,
             error = ?,
+            scheduled_at = datetime('now', '+' || ? || ' seconds'),
+            locked_at = NULL,
+            locked_by = NULL,
             updated_at = CURRENT_TIMESTAMP
           WHERE id = ?
-        `).run(nextRetries, err.message, job.id);
+        `).run(nextRetries, err.message, backoffSeconds, job.id);
       }
     })();
   }
 }
 
-export async function processJobsOnce() {
+/**
+ * Acquire and lease the next available job atomically
+ */
+export function acquireNextJob() {
   const db = getDb();
 
-  // Find next pending job
-  const job = db.prepare(`
+  // Reclaim stale jobs (workers that died mid-processing > 60s ago) or claim pending scheduled jobs
+  const candidate = db.prepare(`
     SELECT * FROM jobs 
-    WHERE status = 'PENDING' 
+    WHERE (status = 'PENDING' OR (status = 'PROCESSING' AND locked_at < datetime('now', '-60 seconds')))
+      AND (scheduled_at IS NULL OR scheduled_at <= CURRENT_TIMESTAMP)
     ORDER BY created_at ASC 
     LIMIT 1
   `).get();
 
+  if (!candidate) return null;
+
+  // Optimistic lease lock
+  const locked = db.prepare(`
+    UPDATE jobs 
+    SET status = 'PROCESSING',
+        locked_at = CURRENT_TIMESTAMP,
+        locked_by = ?,
+        updated_at = CURRENT_TIMESTAMP 
+    WHERE id = ? AND (status = 'PENDING' OR (status = 'PROCESSING' AND locked_at < datetime('now', '-60 seconds')))
+  `).run(WORKER_ID, candidate.id);
+
+  if (locked.changes === 0) {
+    return null; // Another worker claimed it
+  }
+
+  return candidate;
+}
+
+export async function processJobsOnce() {
+  if (activeJobCount >= MAX_CONCURRENT_JOBS) {
+    return false;
+  }
+
+  const job = acquireNextJob();
   if (!job) {
     return false;
   }
 
-  // Optimistic lock
-  const locked = db.prepare(`
-    UPDATE jobs 
-    SET status = 'PROCESSING', updated_at = CURRENT_TIMESTAMP 
-    WHERE id = ? AND status = 'PENDING'
-  `).run(job.id);
+  activeJobCount += 1;
+  processSingleJob(job).finally(() => {
+    activeJobCount = Math.max(0, activeJobCount - 1);
+  });
 
-  if (locked.changes === 0) {
-    return false; // Another worker picked it up
-  }
-
-  await processSingleJob(job);
   return true;
 }
 
@@ -136,19 +187,22 @@ export function startWorker(intervalMs = 2000) {
 
   workerInterval = setInterval(async () => {
     try {
-      await processJobsOnce();
+      while (activeJobCount < MAX_CONCURRENT_JOBS) {
+        const processed = await processJobsOnce();
+        if (!processed) break;
+      }
     } catch (err) {
-      console.error('[JobWorker] Unhandled polling error:', err);
+      console.error(`[JobWorker:${WORKER_ID}] Polling error:`, err);
     }
   }, intervalMs);
 
-  console.log(`✓ Durable SQLite background job worker started (polling every ${intervalMs}ms)`);
+  console.log(`✓ Durable SQLite background job worker active (Worker ID: ${WORKER_ID}, Max Concurrency: ${MAX_CONCURRENT_JOBS})`);
 }
 
 export function stopWorker() {
   if (workerInterval) {
     clearInterval(workerInterval);
     workerInterval = null;
-    console.log('[JobWorker] Background job worker stopped.');
+    console.log(`[JobWorker:${WORKER_ID}] Background job worker stopped.`);
   }
 }

@@ -139,6 +139,36 @@ const migrationsList = [
         db.exec(`ALTER TABLE projects ADD COLUMN github_token TEXT DEFAULT NULL;`);
       }
     }
+  },
+  {
+    name: '004_advanced_backend_features',
+    up: (db) => {
+      // 1. Incidents table: fingerprinting, occurrence count & last seen
+      const incidentCols = db.prepare("PRAGMA table_info('incidents')").all().map((c) => c.name);
+      if (!incidentCols.includes('fingerprint')) {
+        db.exec(`ALTER TABLE incidents ADD COLUMN fingerprint TEXT DEFAULT NULL;`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_incidents_fingerprint ON incidents(project_id, fingerprint);`);
+      }
+      if (!incidentCols.includes('occurrence_count')) {
+        db.exec(`ALTER TABLE incidents ADD COLUMN occurrence_count INTEGER DEFAULT 1;`);
+      }
+      if (!incidentCols.includes('last_seen_at')) {
+        db.exec(`ALTER TABLE incidents ADD COLUMN last_seen_at DATETIME DEFAULT CURRENT_TIMESTAMP;`);
+      }
+
+      // 2. Jobs table: distributed worker leasing & exponential retry scheduling
+      const jobCols = db.prepare("PRAGMA table_info('jobs')").all().map((c) => c.name);
+      if (!jobCols.includes('locked_at')) {
+        db.exec(`ALTER TABLE jobs ADD COLUMN locked_at DATETIME DEFAULT NULL;`);
+      }
+      if (!jobCols.includes('locked_by')) {
+        db.exec(`ALTER TABLE jobs ADD COLUMN locked_by TEXT DEFAULT NULL;`);
+      }
+      if (!jobCols.includes('scheduled_at')) {
+        db.exec(`ALTER TABLE jobs ADD COLUMN scheduled_at DATETIME DEFAULT CURRENT_TIMESTAMP;`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_jobs_scheduling ON jobs(status, scheduled_at);`);
+      }
+    }
   }
 ];
 
