@@ -14,17 +14,18 @@ BugReplay AI — Local Playwright Reproduction CLI
 ========================================================================
 
 Usage:
-  npx bugreplay login --email=<email> --password=<password>
-  npx bugreplay login --token=<jwt_token>
+  npx bugreplay login --email=<email> --password=<password> [--server=<url>]
+  npx bugreplay login --token=<jwt_token> [--server=<url>]
   npx bugreplay configure [--server=<url>]
-  npx bugreplay incidents
-  npx bugreplay run <incident-id> [--output=<dir>] [--headed]
+  npx bugreplay incidents [--server=<url>] [--key=<api_key>]
+  npx bugreplay run <incident-id> [--output=<dir>] [--headed] [--server=<url>] [--key=<api_key>]
   npx bugreplay --help
 
 Options:
   --output    Directory where .spec.js test will be saved (default: .)
   --headed    Launch browser in visible mode
-  --server    BugReplay server API endpoint (default: http://localhost:5000)
+  --server    BugReplay server API endpoint (default: http://localhost:5001)
+  --key       Project API key (alternative to logging in)
 `);
 }
 
@@ -37,7 +38,7 @@ async function main() {
       configureCommand(args);
       break;
     case 'incidents':
-      await incidentsCommand();
+      await incidentsCommand(args);
       break;
     case 'run':
       await runCommand(args);

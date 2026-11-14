@@ -166,6 +166,16 @@ describe('Phase 4: Telemetry Ingestion & Incident Management APIs', () => {
     assert.equal(res.body.data.incident.telemetry[0].id, 'checkout-btn');
   });
 
+  test('GET /api/v1/incidents/:id succeeds with project x-api-key (CLI/SDK machine access)', async () => {
+    const res = await request(app)
+      .get(`/api/v1/incidents/${createdIncidentId}`)
+      .set('x-api-key', rawApiKey);
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.success, true);
+    assert.equal(res.body.data.incident.id, createdIncidentId);
+  });
+
   test('PATCH /api/v1/incidents/:id/status updates status to RESOLVED', async () => {
     const res = await request(app)
       .patch(`/api/v1/incidents/${createdIncidentId}/status`)

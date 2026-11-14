@@ -13,7 +13,7 @@ export function loadConfig() {
   } catch (e) {}
 
   return {
-    serverUrl: process.env.BUGREPLAY_SERVER || 'http://localhost:5000',
+    serverUrl: process.env.BUGREPLAY_SERVER || 'http://localhost:5001',
     token: process.env.BUGREPLAY_TOKEN || null,
   };
 }

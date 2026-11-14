@@ -16,6 +16,6 @@ export function configureCommand(args) {
     console.log(`- Server: ${config.serverUrl}`);
     console.log(`- Authenticated: ${config.token ? 'Yes' : 'No'}`);
     if (config.userEmail) console.log(`- User: ${config.userEmail}`);
-    console.log('\nTo update: npx bugreplay configure --server=http://localhost:5000\n');
+    console.log('\nTo update: npx bugreplay configure --server=http://localhost:5001\n');
   }
 }

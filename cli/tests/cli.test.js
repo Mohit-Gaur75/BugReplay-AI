@@ -23,9 +23,15 @@ describe('Phase 6: Playwright CLI Companion Tool', () => {
     const baseUrl = ApiClient.getBaseUrl();
     assert.equal(baseUrl, 'http://test-server:5000');
 
+    const overrideUrl = ApiClient.getBaseUrl('http://custom-host:8080/');
+    assert.equal(overrideUrl, 'http://custom-host:8080');
+
     const headers = ApiClient.getHeaders();
     assert.equal(headers['Authorization'], 'Bearer jwt-test-token-12345');
     assert.equal(headers['Content-Type'], 'application/json');
+
+    const apiKeyHeaders = ApiClient.getHeaders({ apiKey: 'br_live_custom_key_123' });
+    assert.equal(apiKeyHeaders['x-api-key'], 'br_live_custom_key_123');
   });
 
   test('CLI spec file writer writes valid Playwright test', () => {

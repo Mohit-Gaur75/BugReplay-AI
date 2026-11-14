@@ -1,8 +1,18 @@
 import { ApiClient } from '../services/apiClient.js';
 
-export async function incidentsCommand() {
+export async function incidentsCommand(args = []) {
+  let server = null;
+  let token = null;
+  let apiKey = null;
+
+  for (const arg of args) {
+    if (arg.startsWith('--server=')) server = arg.split('=')[1];
+    if (arg.startsWith('--token=')) token = arg.split('=')[1];
+    if (arg.startsWith('--key=') || arg.startsWith('--api-key=')) apiKey = arg.split('=')[1];
+  }
+
   try {
-    const list = await ApiClient.listIncidents();
+    const list = await ApiClient.listIncidents({ server, token, apiKey });
     if (!list || list.length === 0) {
       console.log('\nNo incidents found for your account.\n');
       return;

@@ -6,22 +6,28 @@ import { ApiClient } from '../services/apiClient.js';
 export async function runCommand(args) {
   const incidentId = args[0];
   if (!incidentId || incidentId.startsWith('-')) {
-    console.error('Usage: npx bugreplay run <incident-id> [--output=<dir>] [--headed]');
+    console.error('Usage: npx bugreplay run <incident-id> [--output=<dir>] [--headed] [--server=<url>] [--key=<api_key>] [--token=<token>]');
     process.exit(1);
   }
 
   let outputDir = '.';
   let isHeaded = false;
+  let server = null;
+  let token = null;
+  let apiKey = null;
 
   for (const arg of args.slice(1)) {
     if (arg.startsWith('--output=')) outputDir = arg.split('=')[1];
     if (arg === '--headed') isHeaded = true;
+    if (arg.startsWith('--server=')) server = arg.split('=')[1];
+    if (arg.startsWith('--token=')) token = arg.split('=')[1];
+    if (arg.startsWith('--key=') || arg.startsWith('--api-key=')) apiKey = arg.split('=')[1];
   }
 
   console.log(`\n🔍 Fetching incident ${incidentId} from BugReplay AI...`);
 
   try {
-    const incident = await ApiClient.getIncident(incidentId);
+    const incident = await ApiClient.getIncident(incidentId, { server, token, apiKey });
     if (!incident) {
       console.error(`❌ Incident ${incidentId} not found.`);
       process.exit(1);
@@ -79,6 +85,11 @@ export async function runCommand(args) {
     });
   } catch (err) {
     console.error(`❌ Failed to run reproduction: ${err.message}`);
+    if (err.message.includes('401') || err.message.includes('Authentication')) {
+      console.log(`\n💡 Tip: Authenticate first with:`);
+      console.log(`   npx bugreplay login --email=<email> --password=<password>`);
+      console.log(`   or pass project key directly: npx bugreplay run ${incidentId} --key=<br_live_...>\n`);
+    }
     process.exit(1);
   }
 }
